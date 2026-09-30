@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Books — Smart Library</title>
+  <meta name="description" content="Track your borrowed books, return countdowns, renewals, and fines.">
+  <link rel="stylesheet" href="/css/variables.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/pages.css">
+  <link rel="stylesheet" href="/css/dark.css">
+  <style>
+    .borrow-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: var(--space-5);
+      margin-bottom: var(--space-4);
+      transition: all var(--transition);
+    }
+    .borrow-card:hover { box-shadow: var(--shadow); }
+    .borrow-card-body {
+      display: flex;
+      gap: var(--space-4);
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+    .borrow-book-cover {
+      width: 60px;
+      height: 85px;
+      border-radius: var(--radius-xs);
+      background: var(--gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 28px;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .borrow-book-cover img { width: 100%; height: 100%; object-fit: cover; }
+    .borrow-info { flex: 1; min-width: 200px; }
+    .countdown-display {
+      font-family: var(--font-heading);
+      font-weight: 700;
+      font-size: var(--text-lg);
+      padding: var(--space-2) var(--space-4);
+      border-radius: var(--radius-sm);
+      text-align: center;
+      min-width: 160px;
+    }
+    .countdown-green { background: var(--success-bg); color: var(--success); }
+    .countdown-amber { background: var(--warning-bg); color: var(--warning); }
+    .countdown-red { background: var(--danger-bg); color: var(--danger); animation: pulse 1.5s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="container">
+      <div class="section-header animate-in">
+        <h1>My Books</h1>
+        <a href="/catalog" class="btn btn-primary btn-sm">Browse Catalog</a>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs animate-in">
+        <button class="tab active" data-tab="issued" onclick="switchTab('issued')">📖 Issued</button>
+        <button class="tab" data-tab="requested" onclick="switchTab('requested')">📝 Requested</button>
+        <button class="tab" data-tab="to-collect" onclick="switchTab('to-collect')">📦 To Collect</button>
+        <button class="tab" data-tab="history" onclick="switchTab('history')">📋 History</button>
+      </div>
+
+      <div id="borrowings-list" style="margin-top:var(--space-6);"></div>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/theme.js"></script>
+  <script src="/js/ui.js"></script>
+  <script>
+    let allBorrowings = [];
+    let activeTab = 'issued';
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!requireAuth()) return;
+      renderNavbar('my-books');
+      await loadBorrowings();
+      setInterval(updateCountdowns, 1000);
+    });
+
+    function switchTab(tab) {
+      activeTab = tab;
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelector(`.tab[data-tab="${tab}"]`).classList.add('active');
+      renderBorrowings();
+    }
+
+    async function loadBorrowings() {
+      const container = document.getElementById('borrowings-list');
+      showSkeleton(container, 3);
+      try {
+        const data = await api.get('/borrowings/mine');
+        allBorrowings = data.borrowings || [];
+        renderBorrowings();
+      } catch (err) {
+        Toast.error(err.message || 'Failed to load borrowings');
+        container.innerHTML = '';
+      }
+    }
+
+    function renderBorrowings() {
+      const container = document.getElementById('borrowings-list');
+      let filtered;
+
+      switch (activeTab) {
+        case 'issued': filtered = allBorrowings.filter(b => ['issued', 'overdue'].includes(b.status)); break;
+        case 'requested': filtered = allBorrowings.filter(b => b.status === 'requested'); break;
+        case 'to-collect': filtered = allBorrowings.filter(b => b.status === 'approved'); break;
+        case 'history': filtered = allBorrowings.filter(b => ['returned', 'rejected', 'cancelled'].includes(b.status)); break;
+        default: filtered = [];
+      }
+
+      if (filtered.length === 0) {
+        const msgs = {
+          issued: { icon: '📖', title: 'No Issued Books', msg: 'Books you borrow will appear here with live countdowns.' },
+          requested: { icon: '📝', title: 'No Pending Requests', msg: 'Request a book from the catalog.' },
+          'to-collect': { icon: '📦', title: 'Nothing to Collect', msg: 'Approved books waiting for pickup will appear here.' },
+          history: { icon: '📋', title: 'No History Yet', msg: 'Your borrowing history will build up over time.' }
+        };
+        showEmptyState(container, { ...msgs[activeTab], actionText: 'Browse Catalog', actionHref: '/catalog' });
+        return;
+      }
+
+      container.innerHTML = filtered.map(b => {
+        const book = b.book || {};
+        const statusColors = {
+          requested: 'badge-primary',
+          approved: 'badge-info',
+          issued: 'badge-success',
+          overdue: 'badge-danger',
+          returned: 'badge-neutral',
+          rejected: 'badge-danger',
+          cancelled: 'badge-neutral'
+        };
+
+        let countdownHtml = '';
+        if (['issued', 'overdue'].includes(b.status) && b.dueDate) {
+          countdownHtml = `<div class="countdown-display" data-due="${b.dueDate}" data-fine-per-day="2">Loading...</div>`;
+        }
+
+        let pickupHtml = '';
+        if (b.status === 'approved' && b.pickupDeadline) {
+          const deadline = new Date(b.pickupDeadline);
+          pickupHtml = `<p style="font-size:var(--text-xs); color:var(--warning);">⏰ Pick up by ${deadline.toLocaleString()}</p>`;
+        }
+
+        let actions = '';
+        if (b.status === 'requested') {
+          actions = `<button class="btn btn-danger btn-sm" onclick="cancelBorrow('${b._id}')">Cancel</button>`;
+        } else if (b.status === 'issued' && b.renewCount < 2) {
+          actions = `<button class="btn btn-secondary btn-sm" onclick="renewBook('${b._id}')">🔄 Renew</button>`;
+        }
+
+        let fineHtml = '';
+        if (b.fine > 0) {
+          fineHtml = `<span class="badge ${b.finePaid ? 'badge-success' : 'badge-danger'}">
+            ${b.finePaid ? '✓ Fine Paid' : `Fine: ₹${b.fine}`}
+          </span>`;
+        }
+
+        const coverHtml = book.coverUrl
+          ? `<div class="borrow-book-cover"><img src="${book.coverUrl}" alt="${book.title}" onerror="this.parentElement.innerHTML='📕'"></div>`
+          : `<div class="borrow-book-cover">📕</div>`;
+
+        return `
+          <div class="borrow-card animate-in">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-3); flex-wrap:wrap; gap:var(--space-2);">
+              <span class="badge ${statusColors[b.status]} badge-dot" style="text-transform:capitalize;">${b.status}</span>
+              ${fineHtml}
+            </div>
+            <div class="borrow-card-body">
+              ${coverHtml}
+              <div class="borrow-info">
+                <h4 style="margin-bottom:var(--space-1);">${book.title || 'Unknown'}</h4>
+                <p style="margin:0; font-size:var(--text-sm); color:var(--muted);">${book.author || ''}</p>
+                ${b.dueDate ? `<p style="margin:var(--space-1) 0 0; font-size:var(--text-xs); color:var(--muted);">Due: ${formatDate(b.dueDate)}</p>` : ''}
+                ${b.renewCount > 0 ? `<span class="badge badge-neutral" style="margin-top:var(--space-1);">Renewed ${b.renewCount}x</span>` : ''}
+                ${pickupHtml}
+                ${b.staffNote ? `<p style="margin-top:var(--space-2); font-size:var(--text-xs); color:var(--muted); font-style:italic;">Staff note: ${b.staffNote}</p>` : ''}
+                <div style="margin-top:var(--space-3);">${actions}</div>
+              </div>
+              ${countdownHtml}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function updateCountdowns() {
+      document.querySelectorAll('.countdown-display').forEach(el => {
+        const dueDate = new Date(el.dataset.due);
+        const now = new Date();
+        const diff = dueDate - now;
+
+        if (diff <= 0) {
+          const overMs = Math.abs(diff);
+          const days = Math.floor(overMs / 86400000);
+          const hours = Math.floor((overMs % 86400000) / 3600000);
+          const finePerDay = parseInt(el.dataset.finePerDay) || 2;
+          const fine = (days + (hours > 0 ? 1 : 0)) * finePerDay;
+          el.className = 'countdown-display countdown-red';
+          el.textContent = `Overdue ${days}d ${hours}h · ₹${fine}`;
+        } else {
+          const days = Math.floor(diff / 86400000);
+          const hours = Math.floor((diff % 86400000) / 3600000);
+          const mins = Math.floor((diff % 3600000) / 60000);
+
+          if (days > 3) {
+            el.className = 'countdown-display countdown-green';
+          } else {
+            el.className = 'countdown-display countdown-amber';
+          }
+
+          if (days > 0) {
+            el.textContent = `${days}d ${hours}h left`;
+          } else {
+            el.textContent = `${hours}h ${mins}m left`;
+          }
+        }
+      });
+    }
+
+    async function cancelBorrow(id) {
+      if (!confirm('Cancel this book request?')) return;
+      try {
+        await api.post(`/borrowings/${id}/cancel`);
+        Toast.success('Request cancelled');
+        await loadBorrowings();
+      } catch (err) {
+        Toast.error(err.message || 'Failed to cancel');
+      }
+    }
+
+    async function renewBook(id) {
+      try {
+        await api.post(`/borrowings/${id}/renew`);
+        Toast.success('Book renewed! Due date extended by 7 days.', '🔄 Renewed');
+        await loadBorrowings();
+      } catch (err) {
+        Toast.error(err.message || 'Failed to renew');
+      }
+    }
+  </script>
+</body>
+</html>

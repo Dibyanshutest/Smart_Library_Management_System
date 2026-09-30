@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Smart Library</title>
+  <meta name="description" content="Your Smart Library dashboard — view bookings, books, and quick actions at a glance.">
+  <link rel="stylesheet" href="/css/variables.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/pages.css">
+  <link rel="stylesheet" href="/css/dark.css">
+</head>
+<body>
+  <main class="page">
+    <div class="container">
+      <!-- Header -->
+      <div class="dashboard-header animate-in">
+        <h1 class="dashboard-greeting" id="greeting">Good morning!</h1>
+        <p class="dashboard-date" id="current-date"></p>
+      </div>
+
+      <!-- Quick Stats -->
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card animate-in">
+          <div class="stat-icon" style="background: var(--primary-100); color: var(--primary);">💺</div>
+          <div class="stat-value" id="stat-bookings">–</div>
+          <div class="stat-label">Active Bookings</div>
+        </div>
+        <div class="stat-card animate-in">
+          <div class="stat-icon" style="background: var(--warning-bg); color: var(--warning);">📚</div>
+          <div class="stat-value" id="stat-books">–</div>
+          <div class="stat-label">Books Borrowed</div>
+        </div>
+        <div class="stat-card animate-in">
+          <div class="stat-icon" style="background: var(--danger-bg); color: var(--danger);">💰</div>
+          <div class="stat-value" id="stat-fines">₹0</div>
+          <div class="stat-label">Unpaid Fines</div>
+        </div>
+        <div class="stat-card animate-in">
+          <div class="stat-icon" style="background: var(--success-bg); color: var(--success);">⭐</div>
+          <div class="stat-value" id="stat-penalty">0</div>
+          <div class="stat-label">Penalty Points</div>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="section-header animate-in">
+        <h2>Quick Actions</h2>
+      </div>
+      <div class="quick-actions" id="quick-actions">
+        <a href="/seats" class="quick-action-card animate-in">
+          <div class="quick-action-icon" style="background: var(--primary-100); color: var(--primary);">💺</div>
+          <span>Book a Seat</span>
+        </a>
+        <a href="/catalog" class="quick-action-card animate-in">
+          <div class="quick-action-icon" style="background: var(--warning-bg); color: var(--warning);">📖</div>
+          <span>Browse Books</span>
+        </a>
+        <a href="/my-bookings" class="quick-action-card animate-in">
+          <div class="quick-action-icon" style="background: var(--info-bg); color: var(--info);">📋</div>
+          <span>My Bookings</span>
+        </a>
+        <a href="/my-books" class="quick-action-card animate-in">
+          <div class="quick-action-icon" style="background: var(--success-bg); color: var(--success);">📚</div>
+          <span>My Books</span>
+        </a>
+      </div>
+
+      <!-- Upcoming Booking -->
+      <div class="section-header animate-in" style="margin-top: var(--space-8);">
+        <h2>Upcoming Booking</h2>
+        <a href="/my-bookings" class="btn btn-ghost btn-sm">View All →</a>
+      </div>
+      <div id="upcoming-booking">
+        <div class="empty-state animate-in" style="padding: var(--space-8);">
+          <div class="empty-state-icon">💺</div>
+          <h3>No Upcoming Bookings</h3>
+          <p>Book a seat to get started with your study session!</p>
+          <a href="/seats" class="btn btn-primary">Book a Seat</a>
+        </div>
+      </div>
+
+      <!-- Books Due Soon -->
+      <div class="section-header animate-in" style="margin-top: var(--space-8);">
+        <h2>Books Due Soon</h2>
+        <a href="/my-books" class="btn btn-ghost btn-sm">View All →</a>
+      </div>
+      <div id="books-due" class="cards-grid">
+        <div class="empty-state animate-in" style="padding: var(--space-8); grid-column: 1 / -1;">
+          <div class="empty-state-icon">📚</div>
+          <h3>No Books Borrowed</h3>
+          <p>Browse the catalog to find your next great read!</p>
+          <a href="/catalog" class="btn btn-primary">Browse Catalog</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/theme.js"></script>
+  <script src="/js/ui.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!requireAuth()) return;
+
+      const user = api.getUser();
+      renderNavbar('dashboard');
+
+      // Set greeting based on time
+      const hour = new Date().getHours();
+      let greeting = 'Good evening';
+      if (hour < 12) greeting = 'Good morning';
+      else if (hour < 17) greeting = 'Good afternoon';
+
+      document.getElementById('greeting').textContent = `${greeting}, ${user.name.split(' ')[0]}! 👋`;
+      document.getElementById('current-date').textContent = new Date().toLocaleDateString('en-IN', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+      });
+
+      // Update stats
+      document.getElementById('stat-fines').textContent = `₹${user.unpaidFines || 0}`;
+      document.getElementById('stat-penalty').textContent = user.penaltyPoints || 0;
+
+      // Fetch bookings count
+      try {
+        const bookingsData = await api.get('/bookings/mine');
+        const active = (bookingsData.bookings || []).filter(b =>
+          b.status === 'booked' || b.status === 'checked_in'
+        );
+        document.getElementById('stat-bookings').textContent = active.length;
+
+        // Show upcoming booking
+        if (active.length > 0) {
+          const upcoming = active[0];
+          const seat = upcoming.seat;
+          document.getElementById('upcoming-booking').innerHTML = `
+            <div class="card animate-in" style="display:flex; align-items:center; gap:var(--space-5); flex-wrap:wrap;">
+              <div class="stat-icon" style="background: var(--primary-100); color: var(--primary); width:56px; height:56px; font-size:24px; border-radius:var(--radius);">💺</div>
+              <div style="flex:1; min-width:200px;">
+                <h4 style="margin-bottom:var(--space-1);">Seat ${seat?.seatCode || ''}</h4>
+                <p style="margin:0; font-size:var(--text-sm); color:var(--muted);">
+                  Reserved at: ${new Date(upcoming.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                </p>
+                <span class="badge ${upcoming.status === 'checked_in' ? 'badge-success badge-dot' : 'badge-primary badge-dot'}" style="margin-top:var(--space-2);">
+                  ${upcoming.status === 'checked_in' ? 'Checked In' : 'Booked'}
+                </span>
+              </div>
+              <div style="display:flex; gap:var(--space-2);">
+                <a href="/my-bookings" class="btn btn-primary btn-sm">View QR</a>
+              </div>
+            </div>
+          `;
+        }
+      } catch {
+        document.getElementById('stat-bookings').textContent = '–';
+      }
+
+      // Fetch borrowings count
+      try {
+        const borrowData = await api.get('/borrowings/mine');
+        const issued = (borrowData.borrowings || []).filter(b =>
+          b.status === 'issued' || b.status === 'overdue'
+        );
+        document.getElementById('stat-books').textContent = issued.length;
+
+        // Show books due
+        if (issued.length > 0) {
+          document.getElementById('books-due').innerHTML = issued.slice(0, 3).map(b => {
+            const book = b.book;
+            const dueDate = new Date(b.dueDate);
+            const now = new Date();
+            const diffMs = dueDate - now;
+            const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+            let statusClass = 'badge-success';
+            let statusText = `${daysLeft} days left`;
+            if (daysLeft <= 0) {
+              statusClass = 'badge-danger';
+              statusText = `Overdue by ${Math.abs(daysLeft)} day(s)`;
+            } else if (daysLeft <= 3) {
+              statusClass = 'badge-warning';
+              statusText = `${daysLeft} days left`;
+            }
+
+            return `
+              <div class="card animate-in">
+                <div style="display:flex; align-items:center; gap:var(--space-4); margin-bottom:var(--space-3);">
+                  <div style="width:40px; height:56px; background:var(--gradient); border-radius:var(--radius-xs); display:flex; align-items:center; justify-content:center; color:#fff; font-size:18px;">📕</div>
+                  <div style="flex:1;">
+                    <h4 style="font-size:var(--text-sm); margin-bottom:2px;">${book?.title || 'Book'}</h4>
+                    <p style="margin:0; font-size:var(--text-xs); color:var(--muted);">${book?.author || ''}</p>
+                  </div>
+                </div>
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                  <span class="badge ${statusClass} badge-dot">${statusText}</span>
+                  <span style="font-size:var(--text-xs); color:var(--muted);">Due: ${formatDate(b.dueDate)}</span>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+      } catch {
+        document.getElementById('stat-books').textContent = '–';
+      }
+
+      // Update user data from server
+      try {
+        const data = await api.get('/auth/me');
+        api.setUser(data.user);
+      } catch {}
+    });
+  </script>
+</body>
+</html>

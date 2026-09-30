@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Staff Panel — Smart Library</title>
+  <meta name="description" content="Manage book requests, issue and return books, and view inventory.">
+  <link rel="stylesheet" href="/css/variables.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/pages.css">
+  <link rel="stylesheet" href="/css/dark.css">
+</head>
+<body>
+  <main class="page">
+    <div class="container">
+      <div class="section-header animate-in">
+        <h1>Staff Panel</h1>
+        <span class="badge badge-primary">Staff View</span>
+      </div>
+
+      <div class="tabs animate-in">
+        <button class="tab active" data-tab="requests" onclick="switchTab('requests')">📝 Requests</button>
+        <button class="tab" data-tab="active" onclick="switchTab('active')">📖 Active Borrows</button>
+      </div>
+
+      <div id="staff-content" style="margin-top:var(--space-6);"></div>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/theme.js"></script>
+  <script src="/js/ui.js"></script>
+  <script>
+    let currentTab = 'requests';
+    
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!requireAuth()) return;
+      if (!requireRole('staff', 'admin')) return;
+      renderNavbar('staff');
+      await loadData();
+    });
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelector(`.tab[data-tab="${tab}"]`).classList.add('active');
+      loadData();
+    }
+
+    async function loadData() {
+      const container = document.getElementById('staff-content');
+      showSkeleton(container, 3, 'card');
+      
+      try {
+        let statusFilter = currentTab === 'requests' ? 'requested,approved' : 'issued,overdue';
+        // The API currently supports one status or we might need to filter client side if multiple aren't supported.
+        const res1 = await api.get(`/borrowings?status=${currentTab === 'requests' ? 'requested' : 'issued'}`);
+        const res2 = await api.get(`/borrowings?status=${currentTab === 'requests' ? 'approved' : 'overdue'}`);
+        
+        const items = [...(res1.borrowings || []), ...(res2.borrowings || [])];
+        
+        if (items.length === 0) {
+          showEmptyState(container, { icon: '📋', title: 'Nothing here', message: 'No items match this filter.' });
+          return;
+        }
+
+        container.innerHTML = items.map(b => {
+          let actions = '';
+          if (b.status === 'requested') {
+            actions = `
+              <button class="btn btn-success btn-sm" onclick="approveRequest('${b._id}')">Approve</button>
+              <button class="btn btn-danger btn-sm" onclick="rejectRequest('${b._id}')">Reject</button>
+            `;
+          } else if (b.status === 'approved') {
+            actions = `<button class="btn btn-primary btn-sm" onclick="issueBook('${b._id}')">Issue (Hand over)</button>`;
+          } else if (['issued', 'overdue'].includes(b.status)) {
+            actions = `<button class="btn btn-secondary btn-sm" onclick="returnBook('${b._id}')">Process Return</button>`;
+          }
+          
+          return `
+            <div class="card animate-in" style="margin-bottom:var(--space-4);">
+              <div style="display:flex; justify-content:space-between; margin-bottom:var(--space-2);">
+                <span class="badge badge-neutral">${b.status}</span>
+                <span style="font-size:var(--text-xs); color:var(--muted);">${formatDate(b.createdAt)}</span>
+              </div>
+              <h4 style="margin-bottom:var(--space-1);">${b.book?.title || 'Unknown Book'}</h4>
+              <p style="font-size:var(--text-sm); color:var(--muted); margin-bottom:var(--space-2);">
+                User: ${b.user?.name || '?'} (${b.user?.email || '?'})
+              </p>
+              <div style="display:flex; gap:var(--space-2); margin-top:var(--space-4);">
+                ${actions}
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        Toast.error(err.message || 'Failed to load staff data');
+      }
+    }
+
+    async function approveRequest(id) {
+      try {
+        await api.post(`/borrowings/${id}/approve`);
+        Toast.success('Request approved');
+        loadData();
+      } catch (err) { Toast.error(err.message); }
+    }
+
+    async function rejectRequest(id) {
+      const note = prompt('Reason for rejection (optional):');
+      if (note === null) return;
+      try {
+        await api.post(`/borrowings/${id}/reject`, { note });
+        Toast.success('Request rejected');
+        loadData();
+      } catch (err) { Toast.error(err.message); }
+    }
+
+    async function issueBook(id) {
+      try {
+        await api.post(`/borrowings/${id}/issue`);
+        Toast.success('Book marked as issued');
+        loadData();
+      } catch (err) { Toast.error(err.message); }
+    }
+
+    async function returnBook(id) {
+      try {
+        const res = await api.post(`/borrowings/${id}/return`);
+        if (res.borrowing?.fine > 0) {
+          Toast.warning(`Book returned. User has a fine of ₹${res.borrowing.fine}.`);
+        } else {
+          Toast.success('Book returned successfully');
+        }
+        loadData();
+      } catch (err) { Toast.error(err.message); }
+    }
+  </script>
+</body>
+</html>

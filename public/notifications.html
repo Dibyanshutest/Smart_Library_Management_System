@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notifications — Smart Library</title>
+  <meta name="description" content="View your notifications for bookings, books, fines, and reminders.">
+  <link rel="stylesheet" href="/css/variables.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/pages.css">
+  <link rel="stylesheet" href="/css/dark.css">
+  <style>
+    .notif-item {
+      display: flex;
+      gap: var(--space-4);
+      padding: var(--space-4) var(--space-5);
+      border-bottom: 1px solid var(--border-light);
+      transition: background var(--transition-fast);
+      cursor: pointer;
+    }
+    .notif-item:hover { background: var(--surface-hover); }
+    .notif-item.unread { background: var(--primary-50); }
+    .notif-item.unread:hover { background: var(--primary-100); }
+    .notif-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .notif-content { flex: 1; }
+    .notif-title { font-weight: 600; font-size: var(--text-sm); margin-bottom: 2px; }
+    .notif-message { font-size: var(--text-xs); color: var(--muted); margin: 0; }
+    .notif-time { font-size: var(--text-xs); color: var(--muted-light); margin-top: var(--space-1); }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="container">
+      <div class="section-header animate-in">
+        <h1>🔔 Notifications</h1>
+        <button class="btn btn-ghost btn-sm" id="mark-all-read">Mark all read</button>
+      </div>
+
+      <div class="card card-flat animate-in" style="padding:0; overflow:hidden;">
+        <div id="notif-list"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/theme.js"></script>
+  <script src="/js/ui.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!requireAuth()) return;
+      renderNavbar('notifications');
+
+      document.getElementById('mark-all-read').addEventListener('click', markAllRead);
+      await loadNotifications();
+    });
+
+    async function loadNotifications() {
+      const container = document.getElementById('notif-list');
+      try {
+        const data = await api.get('/notifications');
+        const notifs = data.notifications || [];
+
+        if (notifs.length === 0) {
+          showEmptyState(container, { icon: '🔔', title: 'No Notifications', message: 'You\'re all caught up!' });
+          return;
+        }
+
+        const typeIcons = {
+          booking: '💺',
+          borrow: '📚',
+          reminder: '⏰',
+          fine: '💰',
+          system: '📢'
+        };
+        const typeBg = {
+          booking: 'var(--primary-100)',
+          borrow: 'var(--success-bg)',
+          reminder: 'var(--warning-bg)',
+          fine: 'var(--danger-bg)',
+          system: 'var(--info-bg)'
+        };
+
+        container.innerHTML = notifs.map(n => `
+          <div class="notif-item ${n.read ? '' : 'unread'}" onclick="markRead('${n._id}', this)">
+            <div class="notif-icon" style="background:${typeBg[n.type] || typeBg.system};">${typeIcons[n.type] || '📢'}</div>
+            <div class="notif-content">
+              <div class="notif-title">${n.title}</div>
+              <p class="notif-message">${n.message}</p>
+              <div class="notif-time">${timeAgo(n.createdAt)}</div>
+            </div>
+            ${n.read ? '' : '<div class="badge badge-dot badge-primary" style="align-self:center;">New</div>'}
+          </div>
+        `).join('');
+      } catch (err) {
+        Toast.error(err.message || 'Failed to load notifications');
+      }
+    }
+
+    async function markRead(id, el) {
+      try {
+        await api.put(`/notifications/${id}/read`);
+        el.classList.remove('unread');
+        const badge = el.querySelector('.badge');
+        if (badge) badge.remove();
+        fetchNotificationCount();
+      } catch {}
+    }
+
+    async function markAllRead() {
+      try {
+        await api.put('/notifications/read-all');
+        Toast.success('All notifications marked as read');
+        await loadNotifications();
+        fetchNotificationCount();
+      } catch (err) {
+        Toast.error(err.message || 'Failed to mark all read');
+      }
+    }
+  </script>
+</body>
+</html>

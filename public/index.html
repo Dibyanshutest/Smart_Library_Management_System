@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Library — Modern Library Reservation System</title>
+  <meta name="description" content="Book library seats visually, check in with QR codes, borrow and manage books — all in one beautiful app.">
+  <link rel="stylesheet" href="/css/variables.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/pages.css">
+  <link rel="stylesheet" href="/css/dark.css">
+</head>
+<body>
+  <!-- HERO SECTION -->
+  <section class="hero">
+    <div class="hero-bg">
+      <div class="hero-grid"></div>
+    </div>
+    <div class="hero-content animate-in">
+      <div class="hero-badge">✨ Smart Library Reservation System</div>
+      <h1 class="hero-title">
+        Your Library,<br>
+        <span class="gradient-text">Reimagined.</span>
+      </h1>
+      <p class="hero-subtitle">
+        Book seats like cinema tickets, check in with QR codes, borrow books with live countdowns — all in one beautiful, modern platform.
+      </p>
+      <div class="hero-actions">
+        <a href="/register" class="hero-btn hero-btn-primary" id="hero-get-started">
+          Get Started Free →
+        </a>
+        <a href="/login" class="hero-btn hero-btn-secondary" id="hero-login">
+          Sign In
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES SECTION -->
+  <section class="features-section" id="features">
+    <div class="features-header animate-in">
+      <h2>Everything You Need</h2>
+      <p>A complete library management experience, designed for modern campuses.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card animate-in">
+        <div class="feature-icon" style="background: var(--primary-100); color: var(--primary);">💺</div>
+        <h3>Cinema-Style Seats</h3>
+        <p>Pick your favorite seat from a visual grid — just like booking movie tickets. See real-time availability at a glance.</p>
+      </div>
+
+      <div class="feature-card animate-in">
+        <div class="feature-icon" style="background: var(--success-bg); color: var(--success);">📱</div>
+        <h3>QR Check-In</h3>
+        <p>Scan your unique QR code at the entrance for instant check-in. No more queues or manual registers.</p>
+      </div>
+
+      <div class="feature-card animate-in">
+        <div class="feature-icon" style="background: var(--warning-bg); color: var(--warning);">📚</div>
+        <h3>Smart Borrowing</h3>
+        <p>Request, borrow, and renew books with live return countdowns. Get timely reminders so you never miss a deadline.</p>
+      </div>
+
+      <div class="feature-card animate-in">
+        <div class="feature-icon" style="background: var(--info-bg); color: var(--info);">📊</div>
+        <h3>Analytics & Insights</h3>
+        <p>Track peak hours, popular books, and study habits. Data-driven decisions for a better library experience.</p>
+      </div>
+
+      <div class="feature-card animate-in">
+        <div class="feature-icon" style="background: var(--danger-bg); color: var(--danger);">🔔</div>
+        <h3>Smart Notifications</h3>
+        <p>Stay informed with real-time alerts for bookings, due dates, fines, and more. Never miss an important update.</p>
+      </div>
+
+      <div class="feature-card animate-in">
+        <div class="feature-icon" style="background: rgba(6, 182, 212, 0.1); color: var(--accent);">🌙</div>
+        <h3>Dark Mode & PWA</h3>
+        <p>Beautiful dark mode for late-night study sessions. Install as an app on any device for quick access.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="landing-footer">
+    <p>© 2024 Smart Library Reservation System. Built with ❤️ for students.</p>
+  </footer>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/theme.js"></script>
+  <script src="/js/ui.js"></script>
+  <script>
+    // If logged in, redirect to dashboard
+    if (api.isLoggedIn()) {
+      window.location.href = '/dashboard';
+    }
+
+    // Add theme toggle to top-right corner
+    const themeBtn = document.createElement('button');
+    themeBtn.className = 'theme-toggle';
+    themeBtn.style.cssText = 'position:fixed;top:var(--space-4);right:var(--space-4);z-index:100;background:rgba(255,255,255,0.1);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.15);border-radius:var(--radius-sm);';
+    themeBtn.addEventListener('click', () => ThemeManager.toggle());
+    document.body.appendChild(themeBtn);
+
+    // Intersection Observer for animation
+    const animateEls = document.querySelectorAll('.animate-in');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.animationPlayState = 'running';
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1 });
+
+    animateEls.forEach(el => {
+      el.style.animationPlayState = 'paused';
+      observer.observe(el);
+    });
+
+    // Animate hero immediately
+    document.querySelector('.hero-content')?.style.setProperty('animation-play-state', 'running');
+  </script>
+</body>
+</html>

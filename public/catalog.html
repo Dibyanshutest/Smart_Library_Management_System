@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book Catalog — Smart Library</title>
+  <meta name="description" content="Browse, search, and request books from the Smart Library catalog.">
+  <link rel="stylesheet" href="/css/variables.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/pages.css">
+  <link rel="stylesheet" href="/css/dark.css">
+  <style>
+    .book-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: all var(--transition);
+    }
+    .book-card:hover { box-shadow: var(--shadow); transform: translateY(-3px); }
+    .book-cover {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+      background: var(--gradient-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 64px;
+    }
+    .book-cover img { width: 100%; height: 100%; object-fit: cover; }
+    .book-card-body { padding: var(--space-4); }
+    .book-card-body h4 {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      margin-bottom: var(--space-1);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .book-card-body .author {
+      font-size: var(--text-xs);
+      color: var(--muted);
+      margin-bottom: var(--space-3);
+    }
+    .book-card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-2);
+    }
+    .availability { font-size: var(--text-xs); font-weight: 600; }
+    .avail-yes { color: var(--success); }
+    .avail-no { color: var(--danger); }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="container">
+      <div class="section-header animate-in">
+        <h1>📚 Book Catalog</h1>
+      </div>
+
+      <!-- Search -->
+      <div class="search-bar animate-in">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="search-input" class="form-input" placeholder="Search books by title, author, or tag...">
+      </div>
+
+      <!-- Category chips -->
+      <div class="chips-row animate-in" id="category-chips">
+        <button class="chip active" data-category="all">All</button>
+        <button class="chip" data-category="Programming">💻 Programming</button>
+        <button class="chip" data-category="Science">🔬 Science</button>
+        <button class="chip" data-category="Fiction">📖 Fiction</button>
+        <button class="chip" data-category="History">🏛️ History</button>
+        <button class="chip" data-category="Business">💼 Business</button>
+        <button class="chip" data-category="Engineering">⚙️ Engineering</button>
+      </div>
+
+      <!-- Availability toggle -->
+      <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-6);" class="animate-in">
+        <label style="font-size:var(--text-sm); color:var(--muted); display:flex; align-items:center; gap:var(--space-2); cursor:pointer;">
+          <input type="checkbox" id="available-only" style="accent-color:var(--primary); width:18px; height:18px;">
+          Show available only
+        </label>
+        <span class="text-muted" style="font-size:var(--text-xs);" id="results-count"></span>
+      </div>
+
+      <!-- Book Grid -->
+      <div class="cards-grid cards-grid-sm" id="books-grid"></div>
+
+      <!-- Pagination -->
+      <div style="display:flex; justify-content:center; gap:var(--space-2); margin-top:var(--space-8);" id="pagination"></div>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/theme.js"></script>
+  <script src="/js/ui.js"></script>
+  <script>
+    let currentCategory = 'all';
+    let currentSearch = '';
+    let availableOnly = false;
+    let currentPage = 1;
+    let searchTimeout = null;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!requireAuth()) return;
+      renderNavbar('catalog');
+
+      // Search with debounce
+      document.getElementById('search-input').addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+          currentSearch = e.target.value.trim();
+          currentPage = 1;
+          loadBooks();
+        }, 300);
+      });
+
+      // Category chips
+      document.querySelectorAll('#category-chips .chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          document.querySelectorAll('#category-chips .chip').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          currentCategory = chip.dataset.category;
+          currentPage = 1;
+          loadBooks();
+        });
+      });
+
+      // Availability toggle
+      document.getElementById('available-only').addEventListener('change', (e) => {
+        availableOnly = e.target.checked;
+        currentPage = 1;
+        loadBooks();
+      });
+
+      await loadBooks();
+    });
+
+    async function loadBooks() {
+      const grid = document.getElementById('books-grid');
+      showSkeleton(grid, 6);
+
+      try {
+        let url = `/books?page=${currentPage}&limit=18`;
+        if (currentSearch) url += `&search=${encodeURIComponent(currentSearch)}`;
+        if (currentCategory !== 'all') url += `&category=${currentCategory}`;
+        if (availableOnly) url += `&available=true`;
+
+        const data = await api.get(url);
+        const books = data.books || [];
+
+        document.getElementById('results-count').textContent = `${data.total || 0} books found`;
+
+        if (books.length === 0) {
+          showEmptyState(grid, {
+            icon: '📚',
+            title: 'No Books Found',
+            message: 'Try a different search or category.'
+          });
+          document.getElementById('pagination').innerHTML = '';
+          return;
+        }
+
+        grid.innerHTML = books.map(book => {
+          const available = book.availableCopies > 0;
+          const coverHtml = book.coverUrl
+            ? `<div class="book-cover"><img src="${book.coverUrl}" alt="${book.title}" onerror="this.parentElement.innerHTML='📚'"></div>`
+            : `<div class="book-cover">📚</div>`;
+
+          return `
+            <div class="book-card animate-in">
+              ${coverHtml}
+              <div class="book-card-body">
+                <h4>${book.title}</h4>
+                <p class="author">${book.author}</p>
+                <div style="display:flex; gap:var(--space-1); flex-wrap:wrap; margin-bottom:var(--space-3);">
+                  <span class="badge badge-primary">${book.category}</span>
+                  ${book.publishedYear ? `<span class="badge badge-neutral">${book.publishedYear}</span>` : ''}
+                </div>
+                <div class="book-card-footer">
+                  <span class="availability ${available ? 'avail-yes' : 'avail-no'}">
+                    ${available ? `${book.availableCopies}/${book.totalCopies} available` : 'Unavailable'}
+                  </span>
+                  ${available
+                    ? `<button class="btn btn-primary btn-sm" onclick="requestBook('${book._id}', '${book.title.replace(/'/g, "\\'")}')">Request</button>`
+                    : `<button class="btn btn-secondary btn-sm" onclick="joinWaitlist('${book._id}', '${book.title.replace(/'/g, "\\'")}')">Waitlist</button>`
+                  }
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        // Pagination
+        renderPagination(data.pages, data.page);
+      } catch (err) {
+        Toast.error(err.message || 'Failed to load books');
+        grid.innerHTML = '';
+      }
+    }
+
+    function renderPagination(totalPages, current) {
+      const container = document.getElementById('pagination');
+      if (totalPages <= 1) { container.innerHTML = ''; return; }
+
+      let html = '';
+      for (let i = 1; i <= totalPages; i++) {
+        html += `<button class="btn ${i === current ? 'btn-primary' : 'btn-secondary'} btn-sm" onclick="goToPage(${i})">${i}</button>`;
+      }
+      container.innerHTML = html;
+    }
+
+    function goToPage(page) {
+      currentPage = page;
+      loadBooks();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function requestBook(bookId, title) {
+      try {
+        await api.post('/borrowings/request', { bookId });
+        Toast.success(`Request submitted for "${title}"!`, '📗 Book Requested');
+        loadBooks();
+      } catch (err) {
+        Toast.error(err.message || 'Request failed');
+      }
+    }
+
+    async function joinWaitlist(bookId, title) {
+      try {
+        await api.post(`/waitlist/${bookId}`);
+        Toast.success(`Added to waitlist for "${title}"`, '📋 Waitlisted');
+      } catch (err) {
+        Toast.error(err.message || 'Failed to join waitlist');
+      }
+    }
+  </script>
+</body>
+</html>

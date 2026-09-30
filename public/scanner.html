@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QR Scanner — Smart Library</title>
+  <meta name="description" content="Scan student QR codes for check-in and check-out at the library entrance.">
+  <link rel="stylesheet" href="/css/variables.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/pages.css">
+  <link rel="stylesheet" href="/css/dark.css">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    .scanner-container {
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    #scanner-region {
+      width: 100%;
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 3px solid var(--primary);
+      box-shadow: var(--shadow-md);
+    }
+    .scan-result {
+      margin-top: var(--space-6);
+      padding: var(--space-6);
+      border-radius: var(--radius-lg);
+      text-align: center;
+      animation: fadeInUp 400ms ease;
+    }
+    .scan-success {
+      background: var(--success-bg);
+      border: 2px solid var(--success);
+    }
+    .scan-error {
+      background: var(--danger-bg);
+      border: 2px solid var(--danger);
+    }
+    .scan-result-icon {
+      font-size: 64px;
+      margin-bottom: var(--space-4);
+    }
+    .scan-result h2 {
+      margin-bottom: var(--space-2);
+    }
+    .scan-result p {
+      font-size: var(--text-lg);
+      margin-bottom: var(--space-2);
+    }
+    .scan-details {
+      display: flex;
+      gap: var(--space-4);
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: var(--space-4);
+    }
+    .scan-detail-item {
+      text-align: center;
+    }
+    .scan-detail-item .label {
+      font-size: var(--text-xs);
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .scan-detail-item .value {
+      font-size: var(--text-xl);
+      font-weight: 700;
+      font-family: var(--font-heading);
+    }
+    .manual-entry {
+      margin-top: var(--space-6);
+      padding: var(--space-4);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="container">
+      <div class="section-header animate-in">
+        <h1>🔍 QR Scanner</h1>
+        <span class="badge badge-primary">Staff/Admin Only</span>
+      </div>
+
+      <div class="scanner-container animate-in">
+        <p style="color:var(--muted); text-align:center; margin-bottom:var(--space-4);">
+          Point the camera at a student's QR code to check them in or out.
+        </p>
+
+        <!-- Camera scanner -->
+        <div id="scanner-region"></div>
+
+        <!-- Manual entry fallback -->
+        <div class="manual-entry">
+          <h4 style="margin-bottom:var(--space-3);">Manual Token Entry</h4>
+          <div style="display:flex; gap:var(--space-2);">
+            <input type="text" id="manual-token" class="form-input" placeholder="Paste QR token here..." style="flex:1;">
+            <button class="btn btn-primary" id="manual-submit">Check In</button>
+          </div>
+        </div>
+
+        <!-- Result card -->
+        <div id="scan-result" style="display:none;"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/theme.js"></script>
+  <script src="/js/ui.js"></script>
+  <script>
+    let scanner = null;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!requireAuth()) return;
+      if (!requireRole('staff', 'admin')) return;
+      renderNavbar('scanner');
+
+      // Initialize QR scanner using the built-in UI for better device compatibility
+      try {
+        scanner = new Html5QrcodeScanner(
+          'scanner-region',
+          { 
+            fps: 10, 
+            qrbox: { width: 250, height: 250 },
+            rememberLastUsedCamera: true
+          },
+          false
+        );
+        
+        scanner.render(onScanSuccess, (err) => {
+          // ignore continuous scan errors (like when no QR is in frame)
+        });
+      } catch (err) {
+        console.warn('Scanner initialization failed:', err);
+        document.getElementById('scanner-region').innerHTML = `
+          <div style="padding:var(--space-8); text-align:center; color:var(--muted);">
+            <div style="font-size:48px; margin-bottom:var(--space-4);">📷</div>
+            <p>Camera not available. Use manual token entry below.</p>
+          </div>
+        `;
+      }
+
+      // Manual entry
+      document.getElementById('manual-submit').addEventListener('click', () => {
+        const token = document.getElementById('manual-token').value.trim();
+        if (token) processToken(token);
+      });
+
+      document.getElementById('manual-token').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const token = e.target.value.trim();
+          if (token) processToken(token);
+        }
+      });
+    });
+
+    let lastScannedToken = '';
+    let scanCooldown = false;
+
+    async function onScanSuccess(decodedText) {
+      if (scanCooldown || decodedText === lastScannedToken) return;
+      scanCooldown = true;
+      lastScannedToken = decodedText;
+
+      await processToken(decodedText);
+
+      // Cooldown to prevent rapid re-scans
+      setTimeout(() => { scanCooldown = false; }, 3000);
+    }
+
+    async function processToken(token) {
+      const resultDiv = document.getElementById('scan-result');
+
+      try {
+        const data = await api.post('/scan/checkin', { token });
+
+        // Vibrate on success
+        if (navigator.vibrate) navigator.vibrate(200);
+
+        // Play success sound
+        try { new Audio('data:audio/wav;base64,UklGRl9vT19teleV').play(); } catch {}
+
+        const student = data.student || {};
+        const seat = data.seat || {};
+        const action = data.action === 'checkout' ? 'Checked Out' : 'Checked In';
+        const icon = data.action === 'checkout' ? '🚪' : '✅';
+
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = `
+          <div class="scan-result scan-success">
+            <div class="scan-result-icon">${icon}</div>
+            <h2>${action}!</h2>
+            <p>${data.message}</p>
+            <div class="scan-details">
+              <div class="scan-detail-item">
+                <div class="label">Student</div>
+                <div class="value">${student.name || '—'}</div>
+              </div>
+              <div class="scan-detail-item">
+                <div class="label">Seat</div>
+                <div class="value">${seat.seatCode || '—'}</div>
+              </div>
+              <div class="scan-detail-item">
+                <div class="label">Zone</div>
+                <div class="value">${seat.zone || '—'}</div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // Auto-hide after 5s
+        setTimeout(() => { resultDiv.style.display = 'none'; }, 5000);
+      } catch (err) {
+        // Vibrate on error
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = `
+          <div class="scan-result scan-error">
+            <div class="scan-result-icon">❌</div>
+            <h2>Scan Failed</h2>
+            <p>${err.message || 'Invalid QR code'}</p>
+          </div>
+        `;
+
+        setTimeout(() => { resultDiv.style.display = 'none'; }, 4000);
+      }
+
+      // Clear manual input
+      document.getElementById('manual-token').value = '';
+    }
+  </script>
+</body>
+</html>

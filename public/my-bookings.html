@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Bookings — Smart Library</title>
+  <meta name="description" content="View your seat bookings, scan QR codes, cancel, and check out.">
+  <link rel="stylesheet" href="/css/variables.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/pages.css">
+  <link rel="stylesheet" href="/css/dark.css">
+  <style>
+    .booking-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: var(--space-5);
+      margin-bottom: var(--space-4);
+      transition: all var(--transition);
+    }
+    .booking-card:hover { box-shadow: var(--shadow); }
+    .booking-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--space-3);
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+    .booking-card-body {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      flex-wrap: wrap;
+    }
+    .booking-seat-badge {
+      width: 56px;
+      height: 56px;
+      background: var(--gradient);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 700;
+      font-size: var(--text-lg);
+      flex-shrink: 0;
+    }
+    .booking-info { flex: 1; min-width: 200px; }
+    .booking-actions {
+      display: flex;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+    }
+    .booking-timer {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      padding: var(--space-1) var(--space-3);
+      border-radius: var(--radius-full);
+    }
+    .timer-upcoming { background: var(--info-bg); color: var(--info); }
+    .timer-checkin { background: var(--warning-bg); color: var(--warning); }
+    .timer-active { background: var(--success-bg); color: var(--success); }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="container">
+      <div class="section-header animate-in">
+        <h1>My Bookings</h1>
+        <a href="/seats" class="btn btn-primary btn-sm">+ Book a Seat</a>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs animate-in" id="booking-tabs">
+        <button class="tab active" data-tab="upcoming">Upcoming</button>
+        <button class="tab" data-tab="active">Active</button>
+        <button class="tab" data-tab="past">Past</button>
+      </div>
+
+      <!-- Booking List -->
+      <div id="bookings-list" style="margin-top:var(--space-6);"></div>
+    </div>
+  </main>
+
+  <!-- QR Modal -->
+  <div class="modal-overlay" id="qr-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Your QR Code</h3>
+        <button class="modal-close" onclick="Modal.hide('qr-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="qr-display" style="text-align:center;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="Modal.hide('qr-modal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/theme.js"></script>
+  <script src="/js/ui.js"></script>
+  <script>
+    let allBookings = [];
+    let activeTab = 'upcoming';
+    let timers = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!requireAuth()) return;
+      renderNavbar('my-bookings');
+
+      // Tab switching
+      document.querySelectorAll('#booking-tabs .tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('#booking-tabs .tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          activeTab = tab.dataset.tab;
+          renderBookings();
+        });
+      });
+
+      await loadBookings();
+
+      // Update timers every second
+      setInterval(updateTimers, 1000);
+    });
+
+    async function loadBookings() {
+      const container = document.getElementById('bookings-list');
+      showSkeleton(container, 3);
+
+      try {
+        const data = await api.get('/bookings/mine');
+        allBookings = data.bookings || [];
+        renderBookings();
+      } catch (err) {
+        Toast.error(err.message || 'Failed to load bookings');
+        container.innerHTML = '';
+      }
+    }
+
+    function renderBookings() {
+      const container = document.getElementById('bookings-list');
+      timers = [];
+
+      const now = new Date();
+      let filtered;
+
+      if (activeTab === 'upcoming') {
+        filtered = allBookings.filter(b => b.status === 'booked');
+      } else if (activeTab === 'active') {
+        filtered = allBookings.filter(b => b.status === 'checked_in');
+      } else {
+        filtered = allBookings.filter(b => ['completed', 'cancelled', 'expired'].includes(b.status));
+      }
+
+      if (filtered.length === 0) {
+        const msgs = {
+          upcoming: { icon: '📅', title: 'No Upcoming Bookings', msg: 'Book a seat to get started!' },
+          active: { icon: '✅', title: 'No Active Sessions', msg: 'Check in at the entrance with your QR code.' },
+          past: { icon: '📋', title: 'No Past Bookings', msg: 'Your booking history will appear here.' }
+        };
+        showEmptyState(container, { icon: msgs[activeTab].icon, title: msgs[activeTab].title, message: msgs[activeTab].msg, actionText: 'Book a Seat', actionHref: '/seats' });
+        return;
+      }
+
+      container.innerHTML = filtered.map(booking => {
+        const seat = booking.seat || {};
+        const statusColors = {
+          booked: 'badge-primary',
+          checked_in: 'badge-success',
+          completed: 'badge-info',
+          cancelled: 'badge-neutral',
+          expired: 'badge-danger'
+        };
+        const statusLabels = {
+          booked: 'Booked',
+          checked_in: 'Checked In',
+          completed: 'Completed',
+          cancelled: 'Cancelled',
+          expired: 'Expired (No-show)'
+        };
+
+        let timerHtml = '';
+        if (booking.status === 'booked') {
+          timerHtml = `<span class="booking-timer timer-upcoming" data-timer-booking="${booking._id}" data-timer-type="upcoming" data-timer-created="${booking.createdAt}">—</span>`;
+        } else if (booking.status === 'checked_in') {
+          timerHtml = `<span class="booking-timer timer-active" data-timer-booking="${booking._id}" data-timer-type="active" data-timer-checkedin="${booking.checkedInAt}">—</span>`;
+        }
+
+        let actions = '';
+        if (booking.status === 'booked') {
+          actions = `
+            <button class="btn btn-primary btn-sm" onclick="showQR('${booking._id}')">📱 QR Code</button>
+            <button class="btn btn-danger btn-sm" onclick="cancelBooking('${booking._id}')">Cancel</button>
+          `;
+        } else if (booking.status === 'checked_in') {
+          actions = `
+            <button class="btn btn-secondary btn-sm" onclick="checkoutBooking('${booking._id}')">🚪 Check Out</button>
+          `;
+        }
+
+        return `
+          <div class="booking-card animate-in">
+            <div class="booking-card-header">
+              <span class="badge ${statusColors[booking.status]} badge-dot">${statusLabels[booking.status]}</span>
+              ${timerHtml}
+            </div>
+            <div class="booking-card-body">
+              <div class="booking-seat-badge">${seat.seatCode || '?'}</div>
+              <div class="booking-info">
+                <h4 style="margin-bottom:var(--space-1);">Seat ${seat.seatCode || '?'} · ${seat.zone || ''} Zone</h4>
+                <p style="margin:0; font-size:var(--text-sm); color:var(--muted);">
+                  Reserved at: ${new Date(booking.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                </p>
+                ${seat.features?.length ? `<div style="margin-top:var(--space-2); display:flex; gap:var(--space-1);">${seat.features.map(f => `<span class="badge badge-neutral" style="font-size:10px;">${f}</span>`).join('')}</div>` : ''}
+              </div>
+              <div class="booking-actions">${actions}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function updateTimers() {
+      const now = new Date();
+      document.querySelectorAll('[data-timer-booking]').forEach(el => {
+        const type = el.dataset.timerType;
+
+        if (type === 'upcoming') {
+          const createdAt = new Date(el.dataset.timerCreated);
+          const expiryDate = new Date(createdAt.getTime() + 15 * 60000); // 15 mins expiry
+          const diff = expiryDate - now;
+
+          if (diff <= 0) {
+            el.textContent = 'Expired';
+            el.className = 'booking-timer timer-checkin';
+          } else {
+            const mins = Math.floor(diff / 60000);
+            const secs = Math.floor((diff % 60000) / 1000);
+            el.textContent = `Expires in ${mins}m ${secs}s`;
+          }
+        } else if (type === 'active') {
+          const checkedInAt = new Date(el.dataset.timerCheckedin);
+          const maxEndTime = new Date(checkedInAt.getTime() + 4 * 3600000); // 4 hours max
+          const diff = maxEndTime - now;
+
+          if (diff <= 0) {
+            el.textContent = 'Session ended';
+          } else {
+            const mins = Math.floor(diff / 60000);
+            const hrs = Math.floor(mins / 60);
+            if (hrs > 0) {
+              el.textContent = `${hrs}h ${mins % 60}m remaining`;
+            } else {
+              el.textContent = `${mins}m remaining`;
+            }
+          }
+        }
+      });
+    }
+
+    async function showQR(bookingId) {
+      try {
+        const data = await api.get(`/bookings/${bookingId}/qr`);
+        const booking = allBookings.find(b => b._id === bookingId);
+        const seat = booking?.seat || {};
+
+        document.getElementById('qr-display').innerHTML = `
+          <img src="${data.qrImage}" alt="QR Code" style="width:250px; height:250px; margin:0 auto; border-radius:var(--radius); border:4px solid var(--primary); box-shadow:var(--shadow-md);">
+          <div style="margin-top:var(--space-4); font-size:var(--text-sm); color:var(--muted);">
+            <strong>Seat ${seat.seatCode || '?'}</strong> · ${seat.zone || ''} Zone<br>
+            ${booking ? `Reserved at: ${new Date(booking.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : ''}<br>
+            <span style="color:var(--warning); font-size:var(--text-xs);">Show this at the entrance to check in</span>
+          </div>
+        `;
+        Modal.show('qr-modal');
+      } catch (err) {
+        Toast.error(err.message || 'Failed to load QR code');
+      }
+    }
+
+    async function cancelBooking(bookingId) {
+      if (!confirm('Are you sure you want to cancel this booking?')) return;
+
+      try {
+        await api.delete(`/bookings/${bookingId}`);
+        Toast.success('Booking cancelled');
+        await loadBookings();
+      } catch (err) {
+        Toast.error(err.message || 'Failed to cancel');
+      }
+    }
+
+    async function checkoutBooking(bookingId) {
+      try {
+        await api.post(`/bookings/${bookingId}/checkout`);
+        Toast.success('Checked out! Seat is now free.');
+        await loadBookings();
+      } catch (err) {
+        Toast.error(err.message || 'Failed to check out');
+      }
+    }
+  </script>
+</body>
+</html>

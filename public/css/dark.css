@@ -1,0 +1,51 @@
+/* ═══════════════════════════════════════════════════
+   Smart Library — Dark Mode Additional Overrides
+   ═══════════════════════════════════════════════════ */
+
+/* Most dark mode is handled via CSS variables in variables.css.
+   This file holds component-specific dark overrides that
+   can't be expressed with variables alone. */
+
+[data-theme="dark"] .hero-btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+[data-theme="dark"] .form-input,
+[data-theme="dark"] .form-select,
+[data-theme="dark"] .form-textarea {
+  background: var(--bg-alt);
+}
+
+[data-theme="dark"] .auth-form-side {
+  background: var(--bg);
+}
+
+[data-theme="dark"] .feature-card {
+  background: var(--surface);
+}
+
+[data-theme="dark"] .hero-bg {
+  background: linear-gradient(135deg, #0b0d1f 0%, #141638 30%, #1e1b4b 60%, #312e81 100%);
+}
+
+[data-theme="dark"] .auth-illustration {
+  background: linear-gradient(135deg, #0b0d1f 0%, #1e1b4b 50%, #312e81 100%);
+}
+
+[data-theme="dark"] .toast {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .modal {
+  background: var(--surface);
+}
+
+[data-theme="dark"] .bell-badge {
+  border-color: var(--surface);
+}
+
+[data-theme="dark"] img {
+  opacity: 0.9;
+}

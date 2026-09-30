@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard — Smart Library</title>
+  <meta name="description" content="Library administration, settings, and user management.">
+  <link rel="stylesheet" href="/css/variables.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/pages.css">
+  <link rel="stylesheet" href="/css/dark.css">
+  <style>
+    .admin-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--space-6);
+    }
+    @media (min-width: 992px) {
+      .admin-grid { grid-template-columns: 300px 1fr; }
+    }
+    .admin-nav {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-4);
+      position: sticky;
+      top: 80px;
+    }
+    .admin-nav-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--radius-sm);
+      margin-bottom: var(--space-1);
+      color: var(--text-secondary);
+      font-weight: 500;
+      transition: all var(--transition-fast);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+    }
+    .admin-nav-item:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+    .admin-nav-item.active {
+      background: var(--primary-100);
+      color: var(--primary);
+    }
+    .admin-content-section {
+      display: none;
+      animation: fadeInUp 400ms ease;
+    }
+    .admin-content-section.active {
+      display: block;
+    }
+    
+    /* Tables */
+    .table-responsive {
+      overflow-x: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+    }
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+    .table th, .table td {
+      padding: var(--space-4);
+      border-bottom: 1px solid var(--border);
+    }
+    .table th {
+      background: var(--surface-hover);
+      font-weight: 600;
+      font-size: var(--text-sm);
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .table tbody tr:hover { background: var(--surface-hover); }
+    .table tbody tr:last-child td { border-bottom: none; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="container">
+      <div class="section-header animate-in">
+        <h1>⚙️ Admin Dashboard</h1>
+        <span class="badge badge-primary">Superadmin</span>
+      </div>
+
+      <div class="admin-grid">
+        <!-- Sidebar Nav -->
+        <aside class="animate-in">
+          <div class="admin-nav">
+            <button class="admin-nav-item active" data-target="users">👥 User Management</button>
+            <button class="admin-nav-item" data-target="settings">🔧 System Settings</button>
+            <button class="admin-nav-item" data-target="suggestions">💡 Book Suggestions</button>
+            <hr class="divider">
+            <a href="/staff" class="admin-nav-item" style="text-decoration:none;">👩‍🏫 Go to Staff Panel</a>
+          </div>
+        </aside>
+
+        <!-- Main Content -->
+        <div class="admin-content animate-in">
+          
+          <!-- Users Section -->
+          <section id="users-section" class="admin-content-section active">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-4);">
+              <h2>User Management</h2>
+              <div class="search-bar" style="width:250px;">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="user-search" class="form-input" placeholder="Search users...">
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>Penalties/Fines</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="users-tbody">
+                  <!-- JS injected -->
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- Settings Section -->
+          <section id="settings-section" class="admin-content-section">
+            <h2>System Settings</h2>
+            <div class="card" style="margin-top:var(--space-4);">
+              <form id="settings-form">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-4);">
+                  <div class="form-group">
+                    <label class="form-label">Library Opening Time</label>
+                    <input type="time" id="set-open" class="form-input" required>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Library Closing Time</label>
+                    <input type="time" id="set-close" class="form-input" required>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Max Seat Hours/Day</label>
+                    <input type="number" id="set-max-hours" class="form-input" min="1" max="12" required>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Check-in Grace (mins)</label>
+                    <input type="number" id="set-grace" class="form-input" min="5" max="60" required>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Max Books Allowed</label>
+                    <input type="number" id="set-max-books" class="form-input" min="1" max="10" required>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Fine Per Day (₹)</label>
+                    <input type="number" id="set-fine" class="form-input" min="0" required>
+                  </div>
+                </div>
+                <div style="margin-top:var(--space-4); display:flex; justify-content:flex-end;">
+                  <button type="submit" class="btn btn-primary" id="save-settings-btn">Save Settings</button>
+                </div>
+              </form>
+            </div>
+          </section>
+
+          <!-- Suggestions Section -->
+          <section id="suggestions-section" class="admin-content-section">
+            <h2>Book Suggestions</h2>
+            <div id="suggestions-list" style="margin-top:var(--space-4);">
+              <!-- JS injected -->
+            </div>
+          </section>
+
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/theme.js"></script>
+  <script src="/js/ui.js"></script>
+  <script>
+    let allUsers = [];
+    
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!requireAuth()) return;
+      if (!requireRole('admin')) return;
+      renderNavbar('admin');
+
+      // Nav handling
+      document.querySelectorAll('.admin-nav-item[data-target]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.admin-nav-item').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.admin-content-section').forEach(s => s.classList.remove('active'));
+          
+          btn.classList.add('active');
+          document.getElementById(`${btn.dataset.target}-section`).classList.add('active');
+          
+          loadSectionData(btn.dataset.target);
+        });
+      });
+
+      // User search
+      document.getElementById('user-search').addEventListener('input', (e) => {
+        renderUsers(e.target.value.trim().toLowerCase());
+      });
+
+      // Settings form
+      document.getElementById('settings-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('save-settings-btn');
+        setButtonLoading(btn, true);
+        
+        try {
+          await api.put('/admin/settings', {
+            openingTime: document.getElementById('set-open').value,
+            closingTime: document.getElementById('set-close').value,
+            maxSeatHoursPerDay: parseInt(document.getElementById('set-max-hours').value),
+            checkinGraceMin: parseInt(document.getElementById('set-grace').value),
+            maxBooks: parseInt(document.getElementById('set-max-books').value),
+            finePerDay: parseInt(document.getElementById('set-fine').value)
+          });
+          Toast.success('Settings updated successfully');
+        } catch (err) {
+          Toast.error(err.message || 'Failed to update settings');
+        } finally {
+          setButtonLoading(btn, false);
+        }
+      });
+
+      // Load initial section
+      loadSectionData('users');
+    });
+
+    async function loadSectionData(target) {
+      if (target === 'users') {
+        try {
+          const res = await api.get('/admin/users');
+          allUsers = res.users || [];
+          renderUsers('');
+        } catch (err) { Toast.error('Failed to load users'); }
+      } else if (target === 'settings') {
+        try {
+          const res = await api.get('/admin/settings');
+          const s = res.settings;
+          document.getElementById('set-open').value = s.openingTime || '08:00';
+          document.getElementById('set-close').value = s.closingTime || '20:00';
+          document.getElementById('set-max-hours').value = s.maxSeatHoursPerDay || 4;
+          document.getElementById('set-grace').value = s.checkinGraceMin || 15;
+          document.getElementById('set-max-books').value = s.maxBooks || 3;
+          document.getElementById('set-fine').value = s.finePerDay || 2;
+        } catch (err) { Toast.error('Failed to load settings'); }
+      } else if (target === 'suggestions') {
+        const container = document.getElementById('suggestions-list');
+        showSkeleton(container, 3, 'card');
+        try {
+          const res = await api.get('/suggestions');
+          const sug = res.suggestions || [];
+          if (sug.length === 0) {
+            showEmptyState(container, { icon: '💡', title: 'No suggestions yet' });
+            return;
+          }
+          container.innerHTML = sug.map(s => `
+            <div class="card" style="margin-bottom:var(--space-4);">
+              <div style="display:flex; justify-content:space-between;">
+                <span class="badge badge-${s.status === 'pending' ? 'warning' : s.status === 'approved' ? 'success' : 'danger'}">${s.status}</span>
+                <span style="font-size:var(--text-xs); color:var(--muted);">${s.votes} votes</span>
+              </div>
+              <h4 style="margin:var(--space-2) 0 var(--space-1);">${s.title}</h4>
+              <p style="font-size:var(--text-sm); color:var(--muted); margin-bottom:var(--space-3);">by ${s.author} — Suggested by ${s.user?.name || '?'}</p>
+              ${s.status === 'pending' ? `
+                <div style="display:flex; gap:var(--space-2);">
+                  <button class="btn btn-success btn-sm" onclick="updateSuggestion('${s._id}', 'approved')">Approve (Buy)</button>
+                  <button class="btn btn-danger btn-sm" onclick="updateSuggestion('${s._id}', 'rejected')">Reject</button>
+                </div>
+              ` : `<p style="font-size:var(--text-xs); font-style:italic;">Note: ${s.adminNote || 'No note'}</p>`}
+            </div>
+          `).join('');
+        } catch (err) { Toast.error('Failed to load suggestions'); }
+      }
+    }
+
+    function renderUsers(query) {
+      const tbody = document.getElementById('users-tbody');
+      const filtered = allUsers.filter(u => 
+        u.name.toLowerCase().includes(query) || 
+        u.email.toLowerCase().includes(query) ||
+        (u.studentId || '').toLowerCase().includes(query)
+      );
+
+      tbody.innerHTML = filtered.map(u => `
+        <tr>
+          <td>
+            <div style="font-weight:600;">${u.name}</div>
+            <div style="font-size:var(--text-xs); color:var(--muted);">${u.email} ${u.studentId ? `· ${u.studentId}` : ''}</div>
+          </td>
+          <td>
+            <select class="form-input" style="padding:4px 8px; font-size:12px; height:auto;" onchange="changeRole('${u._id}', this.value)" ${u._id === api.getUser()._id ? 'disabled' : ''}>
+              <option value="student" ${u.role === 'student' ? 'selected' : ''}>Student</option>
+              <option value="staff" ${u.role === 'staff' ? 'selected' : ''}>Staff</option>
+              <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+            </select>
+          </td>
+          <td>
+            <span style="color:${u.penaltyPoints >= 3 ? 'var(--danger)' : 'inherit'};">Pts: ${u.penaltyPoints || 0}</span>
+            <br>
+            <span style="color:${u.unpaidFines > 0 ? 'var(--warning)' : 'inherit'};">₹${u.unpaidFines || 0}</span>
+          </td>
+          <td>
+            ${u.blockedUntil ? `
+              <button class="btn btn-success btn-sm" onclick="unblockUser('${u._id}')">Unblock</button>
+            ` : '<span style="font-size:var(--text-xs); color:var(--muted);">Active</span>'}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function changeRole(id, role) {
+      try {
+        await api.put(`/admin/users/${id}/role`, { role });
+        Toast.success('Role updated');
+      } catch (err) {
+        Toast.error(err.message || 'Failed to update role');
+        loadSectionData('users'); // reload to revert select
+      }
+    }
+
+    async function unblockUser(id) {
+      try {
+        await api.put(`/admin/users/${id}/unblock`);
+        Toast.success('User unblocked and penalties reset');
+        loadSectionData('users');
+      } catch (err) { Toast.error(err.message || 'Failed to unblock'); }
+    }
+
+    async function updateSuggestion(id, status) {
+      const note = prompt(`Reason for ${status === 'approved' ? 'approval' : 'rejection'} (optional):`);
+      if (note === null) return;
+      try {
+        await api.put(`/suggestions/${id}/status`, { status, adminNote: note });
+        Toast.success(`Suggestion ${status}`);
+        loadSectionData('suggestions');
+      } catch (err) { Toast.error(err.message); }
+    }
+  </script>
+</body>
+</html>

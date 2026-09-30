@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seat Map — Smart Library</title>
+  <meta name="description" content="Book your library seat — cinema-style visual seat picker with real-time availability.">
+  <link rel="stylesheet" href="/css/variables.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/pages.css">
+  <link rel="stylesheet" href="/css/dark.css">
+  <style>
+    /* ─── Seat Map Specific Styles ─── */
+    .seat-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-4);
+      margin-bottom: var(--space-6);
+      align-items: flex-end;
+    }
+    .seat-controls .form-group { margin-bottom: 0; min-width: 160px; }
+
+    .zone-tabs {
+      display: flex;
+      gap: var(--space-2);
+      margin-bottom: var(--space-6);
+      overflow-x: auto;
+      padding-bottom: var(--space-2);
+    }
+
+    .screen-label {
+      text-align: center;
+      padding: var(--space-3) var(--space-6);
+      background: var(--gradient);
+      color: #fff;
+      font-size: var(--text-sm);
+      font-weight: 600;
+      border-radius: 0 0 var(--radius) var(--radius);
+      margin: 0 auto var(--space-8);
+      max-width: 300px;
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+    }
+
+    .seat-grid-wrapper {
+      overflow-x: auto;
+      padding: var(--space-4) 0;
+    }
+
+    .seat-grid {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-3);
+      min-width: fit-content;
+    }
+
+    .seat-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .seat-row-label {
+      width: 30px;
+      text-align: center;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .seat {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-sm);
+      border: 2px solid transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+      position: relative;
+      background: var(--seat-available);
+      color: #fff;
+    }
+
+    .seat:hover:not(.seat-blocked):not(.seat-booked):not(.seat-occupied) {
+      transform: scale(1.15);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .seat-available { background: var(--seat-available); }
+    .seat-selected {
+      background: var(--seat-selected);
+      box-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
+      transform: scale(1.1);
+      border-color: #fff;
+    }
+    .seat-booked { background: var(--seat-booked); cursor: not-allowed; opacity: 0.7; }
+    .seat-occupied { background: var(--seat-occupied); cursor: not-allowed; }
+    .seat-blocked {
+      background: var(--seat-blocked);
+      cursor: not-allowed;
+      opacity: 0.5;
+      background-image: repeating-linear-gradient(
+        45deg, transparent, transparent 3px, rgba(255,255,255,0.15) 3px, rgba(255,255,255,0.15) 6px
+      );
+    }
+    .seat-mine {
+      background: var(--seat-mine);
+      border-color: #fff;
+      box-shadow: 0 0 15px rgba(245, 158, 11, 0.4);
+    }
+
+    .seat .seat-star {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    .seat-aisle { width: 20px; }
+
+    /* Legend */
+    .seat-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-4);
+      justify-content: center;
+      margin-top: var(--space-6);
+      padding: var(--space-4);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-xs);
+      color: var(--muted);
+    }
+    .legend-color {
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+    }
+
+    /* Seat detail bottom sheet */
+    .seat-detail {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      box-shadow: var(--shadow-lg);
+      padding: var(--space-6);
+      transform: translateY(100%);
+      transition: transform var(--transition-spring);
+      z-index: var(--z-overlay);
+    }
+    .seat-detail.active {
+      transform: translateY(0);
+    }
+    .seat-detail-handle {
+      width: 40px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin: 0 auto var(--space-4);
+    }
+    .seat-detail-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--space-4);
+    }
+    .seat-detail-features {
+      display: flex;
+      gap: var(--space-2);
+      margin-bottom: var(--space-4);
+    }
+
+    /* Time slot chips */
+    .time-slots {
+      display: flex;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+      margin-bottom: var(--space-6);
+    }
+    .time-slot {
+      padding: var(--space-2) var(--space-4);
+      border-radius: var(--radius-full);
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      color: var(--text-secondary);
+    }
+    .time-slot:hover {
+      border-color: var(--primary-light);
+      color: var(--primary);
+    }
+    .time-slot.active {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+      box-shadow: 0 2px 10px rgba(99, 102, 241, 0.3);
+    }
+    .time-slot.past {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    /* QR Modal */
+    .qr-display {
+      text-align: center;
+      padding: var(--space-4);
+    }
+    .qr-display img {
+      margin: 0 auto;
+      border-radius: var(--radius);
+      border: 4px solid var(--primary);
+      box-shadow: var(--shadow-md);
+    }
+    .qr-info {
+      margin-top: var(--space-4);
+      font-size: var(--text-sm);
+      color: var(--muted);
+    }
+
+    @media (min-width: 768px) {
+      .seat { width: 48px; height: 48px; }
+      .seat-detail {
+        max-width: 480px;
+        left: 50%;
+        transform: translateX(-50%) translateY(100%);
+      }
+      .seat-detail.active {
+        transform: translateX(-50%) translateY(0);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="container">
+      <!-- Header -->
+      <div class="section-header animate-in">
+        <h1>Book a Seat</h1>
+        <button class="btn btn-ghost btn-sm" id="fav-btn" style="display:none;">⭐ My Favorites</button>
+      </div>
+
+
+      <!-- Zone tabs -->
+      <div class="zone-tabs" id="zone-tabs">
+        <button class="chip active" data-zone="all">All Zones</button>
+        <button class="chip" data-zone="Silent">🤫 Silent</button>
+        <button class="chip" data-zone="Reading">📖 Reading</button>
+        <button class="chip" data-zone="Computer">💻 Computer</button>
+        <button class="chip" data-zone="Group">👥 Group</button>
+      </div>
+
+      <!-- Screen label -->
+      <div class="screen-label">📚 Entrance / Librarian Desk</div>
+
+      <!-- Seat Grid -->
+      <div class="seat-grid-wrapper">
+        <div class="seat-grid" id="seat-grid">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="seat-legend animate-in">
+        <div class="legend-item"><div class="legend-color" style="background:var(--seat-available);"></div> Available</div>
+        <div class="legend-item"><div class="legend-color" style="background:var(--seat-selected);"></div> Selected</div>
+        <div class="legend-item"><div class="legend-color" style="background:var(--seat-booked);"></div> Booked</div>
+        <div class="legend-item"><div class="legend-color" style="background:var(--seat-occupied);"></div> Occupied</div>
+        <div class="legend-item"><div class="legend-color" style="background:var(--seat-blocked); background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,.15) 3px,rgba(255,255,255,.15) 6px);"></div> Blocked</div>
+        <div class="legend-item"><div class="legend-color" style="background:var(--seat-mine);"></div> My Booking</div>
+        <div class="legend-item"><div class="legend-color" style="background:var(--seat-available); position:relative;">⭐</div> Favorite</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Seat Detail Bottom Sheet -->
+  <div class="seat-detail" id="seat-detail">
+    <div class="seat-detail-handle"></div>
+    <div class="seat-detail-header">
+      <div>
+        <h3 id="detail-seat-code">—</h3>
+        <span class="badge" id="detail-zone">—</span>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="detail-fav-btn">☆ Favorite</button>
+    </div>
+    <div class="seat-detail-features" id="detail-features"></div>
+    <div id="detail-time" style="font-size:var(--text-sm); color:var(--muted); margin-bottom:var(--space-4);">Check-in required within 15 minutes of booking.</div>
+    <button class="btn btn-primary btn-lg w-full" id="detail-book-btn">Confirm Booking</button>
+    <button class="btn btn-ghost w-full" id="detail-close-btn" style="margin-top:var(--space-2);">Cancel</button>
+  </div>
+
+  <!-- QR Modal -->
+  <div class="modal-overlay" id="qr-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>🎉 Booking Confirmed!</h3>
+        <button class="modal-close" id="qr-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="qr-display" id="qr-display">
+          <!-- QR code inserted here -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <a href="/my-bookings" class="btn btn-primary">View My Bookings</a>
+        <button class="btn btn-secondary" id="qr-close-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/theme.js"></script>
+  <script src="/js/ui.js"></script>
+  <script>
+    let allSeats = [];
+    let libSettings = null;
+    let selectedSeat = null;
+    let activeZone = 'all';
+    let refreshInterval = null;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!requireAuth()) return;
+      renderNavbar('seats');
+
+      try {
+        const res = await api.get('/settings');
+        libSettings = res.settings || {};
+      } catch (err) {
+        console.warn('Failed to fetch settings, using defaults', err);
+        libSettings = { openingTime: '08:00', closingTime: '20:00', bookingCutoffMin: 15 };
+      }
+
+      await loadSeats();
+
+      // Auto-refresh every 30s
+      refreshInterval = setInterval(() => loadSeats(true), 30000);
+
+      // Event: zone tabs
+      document.querySelectorAll('#zone-tabs .chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          document.querySelectorAll('#zone-tabs .chip').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          activeZone = chip.dataset.zone;
+          renderSeatGrid();
+        });
+      });
+
+      // Event: close seat detail
+      document.getElementById('detail-close-btn').addEventListener('click', hideSeatDetail);
+
+      // Event: book seat
+      document.getElementById('detail-book-btn').addEventListener('click', bookSeat);
+
+      // Event: favorite
+      document.getElementById('detail-fav-btn').addEventListener('click', toggleFavorite);
+
+      // Event: close QR modal
+      document.getElementById('qr-modal-close').addEventListener('click', () => Modal.hide('qr-modal'));
+      document.getElementById('qr-close-btn').addEventListener('click', () => Modal.hide('qr-modal'));
+    });
+
+    async function loadSeats(silent = false) {
+      if (!silent) {
+        showSkeleton(document.getElementById('seat-grid'), 24, 'card');
+      }
+
+      try {
+        const data = await api.get('/seats');
+        allSeats = data.seats || [];
+        renderSeatGrid();
+      } catch (err) {
+        if (!silent) Toast.error(err.message || 'Failed to load seats');
+      }
+    }
+
+    function renderSeatGrid() {
+      const grid = document.getElementById('seat-grid');
+      grid.innerHTML = '';
+
+      const filteredSeats = activeZone === 'all'
+        ? allSeats
+        : allSeats.filter(s => s.zone === activeZone);
+
+      if (filteredSeats.length === 0) {
+        grid.innerHTML = '<div class="empty-state" style="padding:var(--space-8);"><div class="empty-state-icon">💺</div><h3>No seats found</h3><p>Try a different zone or time slot.</p></div>';
+        return;
+      }
+
+      // Group by zone
+      const zones = {};
+      filteredSeats.forEach(seat => {
+        if (!zones[seat.zone]) zones[seat.zone] = [];
+        zones[seat.zone].push(seat);
+      });
+
+      Object.entries(zones).forEach(([zone, seats]) => {
+        // Zone header
+        const zoneHeader = document.createElement('div');
+        zoneHeader.style.cssText = 'font-size:var(--text-sm); font-weight:600; color:var(--muted); margin-top:var(--space-4); margin-bottom:var(--space-2);';
+        const zoneEmoji = { Silent: '🤫', Reading: '📖', Computer: '💻', Group: '👥' };
+        zoneHeader.textContent = `${zoneEmoji[zone] || ''} ${zone} Zone`;
+        grid.appendChild(zoneHeader);
+
+        // Group seats by row
+        const rows = {};
+        seats.forEach(seat => {
+          if (!rows[seat.row]) rows[seat.row] = [];
+          rows[seat.row].push(seat);
+        });
+
+        Object.entries(rows).forEach(([rowNum, rowSeats]) => {
+          const row = document.createElement('div');
+          row.className = 'seat-row';
+
+          // Row label
+          const label = document.createElement('div');
+          label.className = 'seat-row-label';
+          label.textContent = rowSeats[0].seatCode.replace(/\d+/, '');
+          row.appendChild(label);
+
+          rowSeats.sort((a, b) => a.col - b.col).forEach(seat => {
+            // Add aisle after column 3 for visual spacing
+            if (seat.col === 4 && rowSeats.length > 4) {
+              const aisle = document.createElement('div');
+              aisle.className = 'seat-aisle';
+              row.appendChild(aisle);
+            }
+
+            const seatEl = document.createElement('button');
+            seatEl.className = `seat seat-${seat.status}`;
+            seatEl.textContent = seat.seatCode;
+            seatEl.setAttribute('aria-label', `Seat ${seat.seatCode}, ${seat.zone} zone, ${seat.status}`);
+            seatEl.dataset.seatId = seat._id;
+
+            if (seat.isFavorite) {
+              seatEl.innerHTML += '<span class="seat-star">⭐</span>';
+            }
+
+            if (selectedSeat && selectedSeat._id === seat._id) {
+              seatEl.classList.remove(`seat-${seat.status}`);
+              seatEl.classList.add('seat-selected');
+            }
+
+            if (seat.status === 'available' || seat.status === 'mine') {
+              seatEl.addEventListener('click', () => selectSeat(seat));
+            }
+
+            row.appendChild(seatEl);
+          });
+
+          grid.appendChild(row);
+        });
+      });
+    }
+
+    function selectSeat(seat) {
+      selectedSeat = seat;
+      renderSeatGrid();
+      showSeatDetail(seat);
+    }
+
+    function showSeatDetail(seat) {
+      document.getElementById('detail-seat-code').textContent = `Seat ${seat.seatCode}`;
+
+      const zoneBadge = document.getElementById('detail-zone');
+      zoneBadge.textContent = seat.zone;
+      zoneBadge.className = 'badge badge-primary';
+
+      // Features
+      const features = document.getElementById('detail-features');
+      features.innerHTML = (seat.features || []).map(f => {
+        const icons = { power: '🔌 Power', window: '🪟 Window', quiet: '🤫 Quiet' };
+        return `<span class="badge badge-neutral">${icons[f] || f}</span>`;
+      }).join('');
+
+      // Time info
+      document.getElementById('detail-time').textContent = 'Check-in required within 15 minutes of booking.';
+
+      // Favorite button
+      const favBtn = document.getElementById('detail-fav-btn');
+      favBtn.textContent = seat.isFavorite ? '⭐ Unfavorite' : '☆ Favorite';
+
+      // Book button
+      const bookBtn = document.getElementById('detail-book-btn');
+      if (seat.status === 'mine') {
+        bookBtn.textContent = 'Already Booked';
+        bookBtn.disabled = true;
+      } else {
+        bookBtn.textContent = 'Confirm Booking';
+        bookBtn.disabled = false;
+      }
+
+      document.getElementById('seat-detail').classList.add('active');
+    }
+
+    function hideSeatDetail() {
+      document.getElementById('seat-detail').classList.remove('active');
+    }
+
+    async function bookSeat() {
+      if (!selectedSeat) return;
+
+      const btn = document.getElementById('detail-book-btn');
+      setButtonLoading(btn, true);
+
+      try {
+        const data = await api.post('/bookings', {
+          seatId: selectedSeat._id
+        });
+
+        hideSeatDetail();
+        Toast.success('Seat booked successfully!', '🎉 Confirmed');
+
+        // Show QR modal
+        try {
+          const qrData = await api.get(`/bookings/${data.booking._id}/qr`);
+          document.getElementById('qr-display').innerHTML = `
+            <img src="${qrData.qrImage}" alt="QR Code for seat ${selectedSeat.seatCode}" style="width:250px; height:250px;">
+            <div class="qr-info">
+              <strong>Seat ${selectedSeat.seatCode}</strong><br>
+              <span style="font-size:var(--text-xs); color:var(--warning);">Show this QR at the entrance to check in</span>
+            </div>
+          `;
+          Modal.show('qr-modal');
+        } catch {
+          // QR display is optional, booking is already confirmed
+        }
+
+        selectedSeat = null;
+        await loadSeats();
+      } catch (err) {
+        Toast.error(err.message || 'Booking failed');
+      } finally {
+        setButtonLoading(btn, false);
+      }
+    }
+
+    async function toggleFavorite() {
+      if (!selectedSeat) return;
+      try {
+        const data = await api.post(`/seats/${selectedSeat._id}/favorite`);
+        Toast.success(data.message);
+        selectedSeat.isFavorite = !selectedSeat.isFavorite;
+        document.getElementById('detail-fav-btn').textContent = selectedSeat.isFavorite ? '⭐ Unfavorite' : '☆ Favorite';
+        await loadSeats();
+      } catch (err) {
+        Toast.error(err.message || 'Failed to update favorite');
+      }
+    }
+  </script>
+</body>
+</html>
