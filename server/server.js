@@ -6,13 +6,12 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
-const initCronJobs = require('./cron/jobs');
 
 const app = express();
 
 // --------------- Security middleware ---------------
 app.use(helmet({
-  contentSecurityPolicy: false, // Allow inline scripts/CDN for frontend
+  contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false
 }));
 
@@ -21,43 +20,30 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate limiter for auth routes
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 min
+  windowMs: 15 * 60 * 1000,
   max: 20,
   message: { message: 'Too many attempts. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false
 });
 
-// --------------- Body parsing ---------------
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false }));
-
-// --------------- Static files ---------------
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// --------------- API routes ---------------
 app.use('/api/auth', authLimiter, require('./routes/auth'));
-
-// Phase 2 routes
 app.use('/api/seats', require('./routes/seats'));
 app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/scan', require('./routes/scan'));
-
-// Phase 3 & 4 routes
 app.use('/api/books', require('./routes/books'));
 app.use('/api/borrowings', require('./routes/borrowings'));
 app.use('/api/waitlist', require('./routes/waitlist'));
 app.use('/api/notifications', require('./routes/notifications'));
-
-// Phase 5 routes
 app.use('/api/suggestions', require('./routes/suggestions'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/settings', require('./routes/settings'));
 
-// --------------- SPA fallback ---------------
-// Serve HTML pages for known routes
 const pages = [
   'login', 'register', 'dashboard', 'seats', 'my-bookings',
   'catalog', 'my-books', 'notifications', 'staff', 'scanner', 'admin'
@@ -68,21 +54,36 @@ pages.forEach(page => {
   });
 });
 
-// --------------- Error handler ---------------
 app.use(errorHandler);
 
-// --------------- Start server ---------------
 const PORT = process.env.PORT || 5000;
 
 const start = async () => {
-  await connectDB();
-  initCronJobs();
+  try {
+    await connectDB();
+    console.log('✅ DB connected');
 
-  app.listen(PORT, () => {
-    console.log(`\n🚀 Smart Library Server running on http://localhost:${PORT}\n`);
-  });
+    const server = app.listen(PORT, () => {
+      console.log(`🚀 Smart Library Server running on http://localhost:${PORT}`);
+    });
+
+    server.on('error', (err) => {
+      console.error('Server error:', err);
+    });
+
+    process.on('uncaughtException', (err) => {
+      console.error('Uncaught Exception:', err);
+      console.error(err.stack);
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    });
+  } catch (err) {
+    console.error('Startup error:', err);
+    console.error(err.stack);
+    process.exit(1);
+  }
 };
 
 start();
-
-module.exports = app;

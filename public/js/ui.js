@@ -230,12 +230,19 @@ function renderNavbar(activePage = '') {
 
   const initial = user ? user.name.charAt(0).toUpperCase() : '?';
 
+  let homeLink = '/';
+  if (isLoggedIn && user) {
+    if (user.role === 'admin') homeLink = '/admin';
+    else if (user.role === 'staff') homeLink = '/staff';
+    else homeLink = '/dashboard';
+  }
+
   const navbar = document.createElement('nav');
   navbar.className = 'navbar';
   navbar.setAttribute('role', 'navigation');
   navbar.innerHTML = `
     <div class="navbar-inner">
-      <a href="${isLoggedIn ? '/dashboard' : '/'}" class="navbar-brand">
+      <a href="${homeLink}" class="navbar-brand">
         <div class="navbar-brand-icon">📖</div>
         <span>SmartLib</span>
       </a>
@@ -258,7 +265,7 @@ function renderNavbar(activePage = '') {
                 <div class="badge badge-primary" style="margin-top: var(--space-1); text-transform: capitalize;">${user?.role || ''}</div>
               </div>
               <div class="dropdown-divider"></div>
-              <button class="dropdown-item" onclick="window.location.href='/dashboard'">👤 Profile</button>
+              <button class="dropdown-item" onclick="window.location.href='${homeLink}'">👤 Profile</button>
               <button class="dropdown-item" onclick="api.logout()">🚪 Log Out</button>
             </div>
           </div>
@@ -365,3 +372,20 @@ function timeAgo(dateStr) {
   if (days < 7) return `${days}d ago`;
   return formatDate(dateStr);
 }
+
+// ─── Inject Scroll Progress Bar ───
+(function injectScrollProgress() {
+  const bar = document.createElement('div');
+  bar.className = 'scroll-progress';
+  bar.setAttribute('aria-hidden', 'true');
+  document.body.prepend(bar);
+})();
+
+// ─── Dynamically Load 3D Motion Engine ───
+(function loadMotionEngine() {
+  const script = document.createElement('script');
+  script.src = '/js/motion.js';
+  script.defer = true;
+  document.body.appendChild(script);
+})();
+

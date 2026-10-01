@@ -11,15 +11,35 @@
   <link rel="stylesheet" href="/css/pages.css">
   <link rel="stylesheet" href="/css/dark.css">
   <style>
+    /* ─── Glass Booking Card ─── */
     .booking-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
+      background: var(--surface-glass);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border-glass);
       border-radius: var(--radius);
       padding: var(--space-5);
       margin-bottom: var(--space-4);
-      transition: all var(--transition);
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-glass);
     }
-    .booking-card:hover { box-shadow: var(--shadow); }
+    .booking-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: var(--gradient-glass-border);
+      opacity: 0.7;
+    }
+    .booking-card:hover {
+      box-shadow: var(--shadow-3d);
+      transform: translateY(-4px) rotateX(var(--rotate-subtle));
+      border-color: rgba(99, 102, 241, 0.2);
+    }
     .booking-card-header {
       display: flex;
       align-items: center;
@@ -46,6 +66,11 @@
       font-weight: 700;
       font-size: var(--text-lg);
       flex-shrink: 0;
+      box-shadow: 0 8px 25px -5px rgba(99, 102, 241, 0.4);
+      transition: transform 0.3s ease;
+    }
+    .booking-card:hover .booking-seat-badge {
+      transform: scale(1.08) rotateZ(-3deg);
     }
     .booking-info { flex: 1; min-width: 200px; }
     .booking-actions {
@@ -58,10 +83,29 @@
       font-weight: 600;
       padding: var(--space-1) var(--space-3);
       border-radius: var(--radius-full);
+      backdrop-filter: blur(8px);
     }
     .timer-upcoming { background: var(--info-bg); color: var(--info); }
     .timer-checkin { background: var(--warning-bg); color: var(--warning); }
     .timer-active { background: var(--success-bg); color: var(--success); }
+
+    /* Cancel button countdown styling */
+    .cancel-countdown {
+      font-size: var(--text-xs);
+      color: var(--muted);
+      margin-top: var(--space-1);
+      display: block;
+    }
+    .btn-cancel-disabled {
+      opacity: 0.35 !important;
+      cursor: not-allowed !important;
+      pointer-events: none !important;
+      position: relative;
+    }
+    .btn-cancel-disabled::after {
+      content: '🔒';
+      margin-left: var(--space-1);
+    }
   </style>
 </head>
 <body>
@@ -108,6 +152,9 @@
     let activeTab = 'upcoming';
     let timers = [];
 
+    // Cancel window: 2 minutes (120,000 ms)
+    const CANCEL_WINDOW_MS = 2 * 60 * 1000;
+
     document.addEventListener('DOMContentLoaded', async () => {
       if (!requireAuth()) return;
       renderNavbar('my-bookings');
@@ -140,6 +187,25 @@
         Toast.error(err.message || 'Failed to load bookings');
         container.innerHTML = '';
       }
+    }
+
+    /**
+     * Check if a booking is still within the 2-minute cancel window
+     */
+    function isCancelAllowed(booking) {
+      const createdAt = new Date(booking.createdAt).getTime();
+      const now = Date.now();
+      return (now - createdAt) < CANCEL_WINDOW_MS;
+    }
+
+    /**
+     * Get remaining cancel time in seconds
+     */
+    function getCancelTimeLeft(booking) {
+      const createdAt = new Date(booking.createdAt).getTime();
+      const elapsed = Date.now() - createdAt;
+      const remaining = CANCEL_WINDOW_MS - elapsed;
+      return Math.max(0, Math.ceil(remaining / 1000));
     }
 
     function renderBookings() {
@@ -191,11 +257,23 @@
           timerHtml = `<span class="booking-timer timer-active" data-timer-booking="${booking._id}" data-timer-type="active" data-timer-checkedin="${booking.checkedInAt}">—</span>`;
         }
 
+        // Cancel button logic: only show for booked status, disable after 2 min
         let actions = '';
         if (booking.status === 'booked') {
+          const cancelAllowed = isCancelAllowed(booking);
+          const cancelTimeLeft = getCancelTimeLeft(booking);
+          const cancelDisabledClass = cancelAllowed ? '' : 'btn-cancel-disabled';
+          const cancelDisabledAttr = cancelAllowed ? '' : 'disabled';
+          const cancelCountdownHtml = cancelAllowed
+            ? `<span class="cancel-countdown" data-cancel-booking="${booking._id}" data-cancel-created="${booking.createdAt}">Cancel available for ${Math.floor(cancelTimeLeft / 60)}m ${cancelTimeLeft % 60}s</span>`
+            : `<span class="cancel-countdown">⏰ Cancel window expired</span>`;
+
           actions = `
-            <button class="btn btn-primary btn-sm" onclick="showQR('${booking._id}')">📱 QR Code</button>
-            <button class="btn btn-danger btn-sm" onclick="cancelBooking('${booking._id}')">Cancel</button>
+            <div>
+              <button class="btn btn-primary btn-sm" onclick="showQR('${booking._id}')">📱 QR Code</button>
+              <button class="btn btn-danger btn-sm ${cancelDisabledClass}" id="cancel-btn-${booking._id}" onclick="cancelBooking('${booking._id}')" ${cancelDisabledAttr}>Cancel</button>
+              ${cancelCountdownHtml}
+            </div>
           `;
         } else if (booking.status === 'checked_in') {
           actions = `
@@ -227,6 +305,8 @@
 
     function updateTimers() {
       const now = new Date();
+
+      // Update expiry timers
       document.querySelectorAll('[data-timer-booking]').forEach(el => {
         const type = el.dataset.timerType;
 
@@ -261,6 +341,33 @@
           }
         }
       });
+
+      // Update cancel countdown timers
+      document.querySelectorAll('[data-cancel-booking]').forEach(el => {
+        const createdAt = new Date(el.dataset.cancelCreated).getTime();
+        const elapsed = Date.now() - createdAt;
+        const remaining = CANCEL_WINDOW_MS - elapsed;
+
+        if (remaining <= 0) {
+          // Cancel window expired — disable the button
+          el.textContent = '⏰ Cancel window expired';
+          el.removeAttribute('data-cancel-booking');
+          el.removeAttribute('data-cancel-created');
+
+          const bookingId = el.dataset.cancelBooking || el.closest('.booking-card')?.querySelector('[id^="cancel-btn-"]')?.id?.replace('cancel-btn-', '');
+          const cancelBtn = el.parentElement?.querySelector('.btn-danger');
+          if (cancelBtn) {
+            cancelBtn.classList.add('btn-cancel-disabled');
+            cancelBtn.setAttribute('disabled', 'true');
+            cancelBtn.onclick = null;
+          }
+        } else {
+          const secs = Math.ceil(remaining / 1000);
+          const mins = Math.floor(secs / 60);
+          const remSecs = secs % 60;
+          el.textContent = `Cancel available for ${mins}m ${String(remSecs).padStart(2, '0')}s`;
+        }
+      });
     }
 
     async function showQR(bookingId) {
@@ -270,11 +377,13 @@
         const seat = booking?.seat || {};
 
         document.getElementById('qr-display').innerHTML = `
-          <img src="${data.qrImage}" alt="QR Code" style="width:250px; height:250px; margin:0 auto; border-radius:var(--radius); border:4px solid var(--primary); box-shadow:var(--shadow-md);">
-          <div style="margin-top:var(--space-4); font-size:var(--text-sm); color:var(--muted);">
+          <div style="background: #ffffff; padding: var(--space-4); display: inline-block; border-radius: var(--radius-sm);">
+            <img src="${data.qrImage}" alt="QR Code" class="qr-image" style="width:250px; height:250px; display:block; opacity: 1 !important; filter: none !important; mix-blend-mode: normal !important; box-shadow: none !important; border: none !important;">
+          </div>
+          <div style="margin-top:var(--space-4); font-size:var(--text-sm); color:var(--text);">
             <strong>Seat ${seat.seatCode || '?'}</strong> · ${seat.zone || ''} Zone<br>
             ${booking ? `Reserved at: ${new Date(booking.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : ''}<br>
-            <span style="color:var(--warning); font-size:var(--text-xs);">Show this at the entrance to check in</span>
+            <span style="color:var(--warning); font-size:var(--text-xs); font-weight: 600;">Show this at the entrance to check in</span>
           </div>
         `;
         Modal.show('qr-modal');
@@ -284,6 +393,14 @@
     }
 
     async function cancelBooking(bookingId) {
+      // Double-check cancel window on click
+      const booking = allBookings.find(b => b._id === bookingId);
+      if (booking && !isCancelAllowed(booking)) {
+        Toast.error('Cancel window has expired (2 minutes). You can no longer cancel this booking.');
+        renderBookings();
+        return;
+      }
+
       if (!confirm('Are you sure you want to cancel this booking?')) return;
 
       try {

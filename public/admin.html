@@ -123,7 +123,7 @@
                   <tr>
                     <th>Name</th>
                     <th>Role</th>
-                    <th>Penalties/Fines</th>
+                    <th>Fines</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -311,8 +311,6 @@
             </select>
           </td>
           <td>
-            <span style="color:${u.penaltyPoints >= 3 ? 'var(--danger)' : 'inherit'};">Pts: ${u.penaltyPoints || 0}</span>
-            <br>
             <span style="color:${u.unpaidFines > 0 ? 'var(--warning)' : 'inherit'};">₹${u.unpaidFines || 0}</span>
           </td>
           <td>

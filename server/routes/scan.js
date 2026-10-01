@@ -18,24 +18,13 @@ router.post('/checkin', auth, authorize('staff', 'admin'), async (req, res, next
       return res.status(400).json({ message: 'QR token is required' });
     }
 
-    // 1. Verify token signature
-    let decoded;
-    try {
-      decoded = verifyQRToken(token);
-    } catch (err) {
-      if (err.name === 'TokenExpiredError') {
-        return res.status(400).json({ message: 'QR code has expired', success: false });
-      }
-      return res.status(400).json({ message: 'Invalid QR code', success: false });
-    }
-
-    // 2. Find the booking
-    const booking = await Booking.findById(decoded.bookingId)
+    // 1. Find the booking by the short qrToken
+    const booking = await Booking.findOne({ qrToken: token })
       .populate('seat')
       .populate('user', 'name email studentId');
 
     if (!booking) {
-      return res.status(404).json({ message: 'Booking not found', success: false });
+      return res.status(404).json({ message: 'Invalid or expired QR code', success: false });
     }
 
     // 3. Handle check-out (second scan of checked-in booking)

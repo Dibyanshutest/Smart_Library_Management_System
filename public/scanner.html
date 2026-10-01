@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/css/components.css">
   <link rel="stylesheet" href="/css/pages.css">
   <link rel="stylesheet" href="/css/dark.css">
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
     .scanner-container {
       max-width: 500px;
@@ -21,7 +21,39 @@
       border-radius: var(--radius);
       overflow: hidden;
       border: 3px solid var(--primary);
-      box-shadow: var(--shadow-md);
+      box-shadow: none !important;
+      /* Kill ALL visual effects that could interfere with QR detection */
+      filter: none !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      transform: none !important;
+      opacity: 1 !important;
+      mix-blend-mode: normal !important;
+      isolation: isolate;
+    }
+    /* Force raw, unprocessed video feed — critical for QR detection */
+    #scanner-region video,
+    #scanner-region canvas,
+    #scanner-region img {
+      filter: none !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      transform: none !important;
+      opacity: 1 !important;
+      mix-blend-mode: normal !important;
+      image-rendering: auto !important;
+    }
+    /* Override any inherited tilt/reveal/motion effects */
+    #scanner-region,
+    #scanner-region * {
+      --parallax-y1: 0 !important;
+      --parallax-y2: 0 !important;
+      perspective: none !important;
+      transform-style: flat !important;
+    }
+    /* Override the html5-qrcode library's own internal styles for clarity */
+    #scanner-region #qr-shaded-region {
+      border-color: rgba(99, 102, 241, 0.5) !important;
     }
     .scan-result {
       margin-top: var(--space-6);
@@ -93,7 +125,9 @@
         </p>
 
         <!-- Camera scanner -->
-        <div id="scanner-region"></div>
+        <div id="scanner-region" style="position: relative;">
+          <video id="qr-video" style="width: 100%; display: block; border-radius: var(--radius);"></video>
+        </div>
 
         <!-- Manual entry fallback -->
         <div class="manual-entry">
@@ -114,36 +148,115 @@
   <script src="/js/theme.js"></script>
   <script src="/js/ui.js"></script>
   <script>
-    let scanner = null;
+    let html5QrCode = null;
+    let scanCooldown = false;
+    let lastScannedToken = '';
 
     document.addEventListener('DOMContentLoaded', async () => {
       if (!requireAuth()) return;
       if (!requireRole('staff', 'admin')) return;
       renderNavbar('scanner');
 
-      // Initialize QR scanner using the built-in UI for better device compatibility
+      // Add status indicator
+      const statusEl = document.createElement('div');
+      statusEl.id = 'scan-status';
+      statusEl.style.cssText = 'text-align:center; padding:var(--space-2); font-size:var(--text-xs); color:var(--muted);';
+      statusEl.textContent = 'Initializing camera...';
+      document.getElementById('scanner-region').before(statusEl);
+
       try {
-        scanner = new Html5QrcodeScanner(
-          'scanner-region',
-          { 
-            fps: 10, 
-            qrbox: { width: 250, height: 250 },
-            rememberLastUsedCamera: true
-          },
-          false
-        );
+        html5QrCode = new Html5Qrcode("scanner-region");
         
-        scanner.render(onScanSuccess, (err) => {
-          // ignore continuous scan errors (like when no QR is in frame)
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 }
+          },
+          (decodedText, decodedResult) => {
+            onScanSuccess(decodedText);
+          },
+          (errorMessage) => {
+            // parse errors are frequent, ignore them
+          }
+        );
+
+        statusEl.textContent = '🟢 Camera active — point at QR code';
+        statusEl.style.color = 'var(--success)';
+
+        // Add controls
+        const controlsDiv = document.createElement('div');
+        controlsDiv.style.cssText = 'display:flex; gap:var(--space-2); justify-content:center; flex-wrap:wrap; margin-top:var(--space-3);';
+        controlsDiv.innerHTML = `
+          <button class="btn btn-ghost btn-sm" id="stop-scan-btn">Stop</button>
+          <label class="btn btn-primary btn-sm" style="cursor:pointer;">
+            📁 Upload Image
+            <input type="file" id="qr-file-input" accept="image/*" style="display:none;">
+          </label>
+        `;
+        document.getElementById('scanner-region').after(controlsDiv);
+
+        // Stop button
+        document.getElementById('stop-scan-btn').addEventListener('click', () => {
+          if (html5QrCode) {
+            html5QrCode.stop().then(() => {
+              statusEl.textContent = '⏹ Scanner stopped';
+              statusEl.style.color = 'var(--muted)';
+              document.getElementById('scanner-region').innerHTML = `
+                <div style="padding:var(--space-8); text-align:center; color:var(--muted);">
+                  <div style="font-size:48px; margin-bottom:var(--space-4);">📷</div>
+                  <p>Scanner stopped.</p>
+                  <button class="btn btn-primary btn-sm" onclick="location.reload()">Restart Scanner</button>
+                </div>
+              `;
+            }).catch(err => console.error(err));
+          }
         });
+
+        // File upload scan
+        document.getElementById('qr-file-input').addEventListener('change', async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          statusEl.textContent = '📁 Scanning uploaded image...';
+          try {
+            const decodedText = await html5QrCode.scanFile(file, true);
+            onScanSuccess(decodedText);
+          } catch (err) {
+            statusEl.textContent = '❌ No QR code found in image';
+            statusEl.style.color = 'var(--danger)';
+            Toast.error('Could not detect a QR code in the uploaded image. Try a clearer photo.');
+          }
+          e.target.value = '';
+        });
+
       } catch (err) {
         console.warn('Scanner initialization failed:', err);
+        statusEl.textContent = '❌ Camera failed to start';
+        statusEl.style.color = 'var(--danger)';
         document.getElementById('scanner-region').innerHTML = `
           <div style="padding:var(--space-8); text-align:center; color:var(--muted);">
             <div style="font-size:48px; margin-bottom:var(--space-4);">📷</div>
-            <p>Camera not available. Use manual token entry below.</p>
+            <p>Camera not available.</p>
+            <p style="font-size:var(--text-xs); margin-top:var(--space-2);">${err.message || err}</p>
+            <label class="btn btn-primary btn-sm" style="cursor:pointer; margin-top:var(--space-3);">
+              📁 Scan from Image Instead
+              <input type="file" id="qr-file-fallback" accept="image/*" style="display:none;">
+            </label>
           </div>
         `;
+        // File fallback
+        document.getElementById('qr-file-fallback')?.addEventListener('change', async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          try {
+            const html5QrCodeFallback = new Html5Qrcode("scanner-region");
+            const decodedText = await html5QrCodeFallback.scanFile(file, true);
+            onScanSuccess(decodedText);
+          } catch (err2) {
+            Toast.error('Could not detect QR code in image.');
+          }
+          e.target.value = '';
+        });
       }
 
       // Manual entry
@@ -160,18 +273,29 @@
       });
     });
 
-    let lastScannedToken = '';
-    let scanCooldown = false;
 
     async function onScanSuccess(decodedText) {
       if (scanCooldown || decodedText === lastScannedToken) return;
       scanCooldown = true;
       lastScannedToken = decodedText;
 
+      const statusEl = document.getElementById('scan-status');
+      if (statusEl) {
+        statusEl.textContent = '✅ QR Detected! Processing...';
+        statusEl.style.color = 'var(--success)';
+      }
+
       await processToken(decodedText);
 
       // Cooldown to prevent rapid re-scans
-      setTimeout(() => { scanCooldown = false; }, 3000);
+      setTimeout(() => {
+        scanCooldown = false;
+        lastScannedToken = '';
+        if (statusEl) {
+          statusEl.textContent = '🟢 Ready to scan next QR code';
+          statusEl.style.color = 'var(--success)';
+        }
+      }, 3000);
     }
 
     async function processToken(token) {
@@ -180,11 +304,7 @@
       try {
         const data = await api.post('/scan/checkin', { token });
 
-        // Vibrate on success
         if (navigator.vibrate) navigator.vibrate(200);
-
-        // Play success sound
-        try { new Audio('data:audio/wav;base64,UklGRl9vT19teleV').play(); } catch {}
 
         const student = data.student || {};
         const seat = data.seat || {};
@@ -214,10 +334,8 @@
           </div>
         `;
 
-        // Auto-hide after 5s
         setTimeout(() => { resultDiv.style.display = 'none'; }, 5000);
       } catch (err) {
-        // Vibrate on error
         if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
 
         resultDiv.style.display = 'block';
@@ -232,7 +350,6 @@
         setTimeout(() => { resultDiv.style.display = 'none'; }, 4000);
       }
 
-      // Clear manual input
       document.getElementById('manual-token').value = '';
     }
   </script>

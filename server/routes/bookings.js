@@ -15,12 +15,7 @@ router.post('/', auth, async (req, res, next) => {
     const user = req.user;
     const settings = await Settings.getSettings();
 
-    // 1. Check if user is blocked
-    if (user.blockedUntil && new Date(user.blockedUntil) > new Date()) {
-      return res.status(403).json({
-        message: `You are blocked from booking until ${new Date(user.blockedUntil).toLocaleDateString()}. Reason: too many no-shows or penalties.`
-      });
-    }
+    // 1. (Penalty block logic removed)
 
     // 2. Check if seat exists and is not blocked
     const seat = await Seat.findById(seatId);
@@ -112,6 +107,15 @@ router.delete('/:id', auth, async (req, res, next) => {
       return res.status(400).json({ message: 'Only booked (unchecked-in) bookings can be cancelled' });
     }
 
+    // Enforce 2-minute cancel window
+    const CANCEL_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
+    const elapsed = Date.now() - new Date(booking.createdAt).getTime();
+    if (elapsed > CANCEL_WINDOW_MS) {
+      return res.status(403).json({
+        message: 'Cancel window has expired. Bookings can only be cancelled within 2 minutes of booking.'
+      });
+    }
+
     const settings = await Settings.getSettings();
     const startDate = new Date(`${booking.date}T${booking.startTime}:00`);
     const now = new Date();
@@ -120,12 +124,7 @@ router.delete('/:id', auth, async (req, res, next) => {
     booking.status = 'cancelled';
     await booking.save();
 
-    // Late cancellation (under 15 min) → half penalty
-    if (minutesUntilStart < (settings.bookingCutoffMin || 15) && minutesUntilStart > 0) {
-      req.user.penaltyPoints = (req.user.penaltyPoints || 0) + 0.5;
-      await req.user.save();
-      await notify(req.user._id, 'Late Cancellation', 'You cancelled within 15 minutes of start. 0.5 penalty points added.', 'booking');
-    }
+    // Late cancellation (under 15 min) penalty removed
 
     await notify(req.user._id, 'Booking Cancelled', `Your booking for seat ${booking.date} has been cancelled.`, 'booking');
 

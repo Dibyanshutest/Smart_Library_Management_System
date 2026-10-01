@@ -24,6 +24,75 @@ body {
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
   overflow-x: hidden;
+  position: relative;
+}
+
+/* ─── Animated Background Orbs ─── */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.5;
+  z-index: -1;
+  pointer-events: none;
+  will-change: transform;
+}
+
+body::before {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+  top: -10%;
+  right: -5%;
+  animation: orbFloat1 20s ease-in-out infinite;
+  transform: translateY(var(--parallax-y1, 0));
+}
+
+body::after {
+  width: 450px;
+  height: 450px;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.12) 0%, transparent 70%);
+  bottom: -10%;
+  left: -5%;
+  animation: orbFloat2 25s ease-in-out infinite;
+  transform: translateY(var(--parallax-y2, 0));
+}
+
+@keyframes orbFloat1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(-40px, 60px) scale(1.1); }
+  50% { transform: translate(30px, -40px) scale(0.95); }
+  75% { transform: translate(-20px, -30px) scale(1.05); }
+}
+
+@keyframes orbFloat2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(50px, -40px) scale(1.08); }
+  66% { transform: translate(-30px, 50px) scale(0.92); }
+}
+
+/* Third orb via a wrapper for extra depth */
+.page::before {
+  content: '';
+  position: fixed;
+  width: 350px;
+  height: 350px;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.08) 0%, transparent 70%);
+  border-radius: 50%;
+  filter: blur(100px);
+  top: 40%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: -1;
+  pointer-events: none;
+  animation: orbFloat3 18s ease-in-out infinite;
+}
+
+@keyframes orbFloat3 {
+  0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
+  50% { transform: translateX(-40%) translateY(-50px) scale(1.15); }
 }
 
 /* ─── Typography ─── */
@@ -145,6 +214,8 @@ img, video {
   padding-top: calc(var(--navbar-height) + var(--space-8));
   padding-bottom: calc(var(--bottom-bar-height) + var(--space-8));
   min-height: 100vh;
+  perspective: 1200px;
+  perspective-origin: center top;
 }
 
 @media (min-width: 768px) {
@@ -161,4 +232,98 @@ img, video {
     transition-duration: 0.01ms !important;
   }
   html { scroll-behavior: auto; }
+  [data-tilt-scroll],
+  [data-tilt],
+  [data-depth] {
+    transform: none !important;
+  }
+}
+
+/* ═══════════════════════════════════════
+   3D SCROLL REVEAL ANIMATIONS
+   ═══════════════════════════════════════ */
+
+/* Base state — hidden before reveal */
+[data-reveal] {
+  opacity: 0;
+  will-change: transform, opacity;
+  transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-reveal="up"] {
+  transform: perspective(1000px) translateY(60px) rotateX(8deg) scale(0.95);
+}
+
+[data-reveal="down"] {
+  transform: perspective(1000px) translateY(-60px) rotateX(-8deg) scale(0.95);
+}
+
+[data-reveal="left"] {
+  transform: perspective(1000px) translateX(-60px) rotateY(8deg) scale(0.95);
+}
+
+[data-reveal="right"] {
+  transform: perspective(1000px) translateX(60px) rotateY(-8deg) scale(0.95);
+}
+
+[data-reveal="scale"] {
+  transform: perspective(1000px) scale(0.8) rotateX(4deg);
+}
+
+[data-reveal="flip"] {
+  transform: perspective(1000px) rotateY(15deg) translateX(30px) scale(0.9);
+}
+
+/* Revealed state */
+[data-reveal].revealed {
+  opacity: 1;
+  transform: perspective(1000px) translateY(0) translateX(0) rotateX(0) rotateY(0) scale(1);
+}
+
+/* Elements being tilted by scroll need smooth transitions */
+[data-tilt-scroll] {
+  will-change: transform;
+  transition: transform 0.15s ease-out;
+  transform-style: preserve-3d;
+}
+
+/* Mouse-tilt cards */
+[data-tilt] {
+  will-change: transform;
+  transform-style: preserve-3d;
+}
+
+/* 3D Depth glare overlay for tilt cards */
+[data-tilt]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(255, 255, 255, 0.08) 0%,
+    transparent 60%
+  );
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 1;
+}
+[data-tilt]:hover::after {
+  opacity: 1;
+}
+
+/* Scroll progress bar at top */
+.scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: var(--gradient);
+  z-index: 9999;
+  width: calc(var(--scroll-progress, 0) * 100%);
+  transition: width 0.1s linear;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+  border-radius: 0 2px 2px 0;
 }

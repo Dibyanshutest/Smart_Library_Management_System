@@ -14,7 +14,8 @@
 [data-theme="dark"] .form-input,
 [data-theme="dark"] .form-select,
 [data-theme="dark"] .form-textarea {
-  background: var(--bg-alt);
+  background: rgba(15, 22, 41, 0.6);
+  border-color: var(--border-glass);
 }
 
 [data-theme="dark"] .auth-form-side {
@@ -22,7 +23,7 @@
 }
 
 [data-theme="dark"] .feature-card {
-  background: var(--surface);
+  background: var(--surface-glass);
 }
 
 [data-theme="dark"] .hero-bg {
@@ -34,12 +35,14 @@
 }
 
 [data-theme="dark"] .toast {
-  background: var(--surface);
-  border-color: var(--border);
+  background: var(--surface-glass-strong);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-color: var(--border-glass);
 }
 
 [data-theme="dark"] .modal {
-  background: var(--surface);
+  background: var(--surface-glass-strong);
 }
 
 [data-theme="dark"] .bell-badge {
@@ -48,4 +51,44 @@
 
 [data-theme="dark"] img {
   opacity: 0.9;
+}
+
+/* Stronger orb glow in dark mode */
+[data-theme="dark"] body::before {
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.2) 0%, transparent 70%);
+  opacity: 0.6;
+}
+
+[data-theme="dark"] body::after {
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.18) 0%, transparent 70%);
+  opacity: 0.5;
+}
+
+[data-theme="dark"] .page::before {
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.1) 0%, transparent 70%);
+}
+
+/* Dark mode glass border glow */
+[data-theme="dark"] .card,
+[data-theme="dark"] .stat-card,
+[data-theme="dark"] .quick-action-card,
+[data-theme="dark"] .feature-card {
+  border-color: rgba(99, 102, 241, 0.08);
+}
+
+[data-theme="dark"] .card:hover,
+[data-theme="dark"] .stat-card:hover,
+[data-theme="dark"] .quick-action-card:hover,
+[data-theme="dark"] .feature-card:hover {
+  border-color: rgba(99, 102, 241, 0.25);
+  box-shadow: var(--shadow-3d), 0 0 30px rgba(99, 102, 241, 0.08);
+}
+
+/* Dark mode navbar + bottom-bar enhanced glow */
+[data-theme="dark"] .navbar {
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2), 0 0 1px rgba(99, 102, 241, 0.1);
+}
+
+[data-theme="dark"] .bottom-bar {
+  box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.3), 0 0 1px rgba(99, 102, 241, 0.1);
 }

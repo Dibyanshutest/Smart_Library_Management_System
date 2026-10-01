@@ -1,32 +1,22 @@
 const QRCode = require('qrcode');
-const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 /**
- * Generate a signed QR token for a booking.
+ * Generate a random QR token for a booking.
  * @param {Object} booking - The booking document
- * @returns {string} Signed JWT token
+ * @returns {string} Random hex token
  */
 const generateQRToken = (booking) => {
-  const token = jwt.sign(
-    {
-      bookingId: booking._id.toString(),
-      userId: booking.user.toString(),
-      seatId: booking.seat.toString()
-    },
-    process.env.QR_SECRET,
-    { expiresIn: '24h' }
-  );
-
-  return token;
+  // 16 chars (8 bytes) is plenty of entropy for a short-lived token
+  return crypto.randomBytes(8).toString('hex');
 };
 
 /**
- * Verify a QR token.
- * @param {string} token - The QR JWT token
- * @returns {Object} Decoded payload
+ * Note: Verification is now done via database lookup (Booking.findOne({ qrToken }))
+ * so this function is deprecated, but kept as a passthrough for compatibility.
  */
 const verifyQRToken = (token) => {
-  return jwt.verify(token, process.env.QR_SECRET);
+  return { token };
 };
 
 /**
@@ -36,10 +26,11 @@ const verifyQRToken = (token) => {
  */
 const generateQRImage = async (data) => {
   return QRCode.toDataURL(data, {
-    width: 300,
-    margin: 2,
+    width: 400,
+    margin: 4,
+    errorCorrectionLevel: 'H',
     color: {
-      dark: '#0f172a',
+      dark: '#000000',
       light: '#ffffff'
     }
   });

@@ -15,6 +15,7 @@ const initCronJobs = () => {
   // ──────────────────────────────────────────
   cron.schedule('* * * * *', async () => {
     try {
+      console.log('⏰ Cron (expire bookings) running...');
       const settings = await Settings.getSettings();
       const graceMin = settings.checkinGraceMin || 15;
       const now = new Date();
@@ -23,42 +24,27 @@ const initCronJobs = () => {
       const bookings = await Booking.find({ status: 'booked' }).populate('seat');
 
       for (const booking of bookings) {
-        const graceEnd = new Date(booking.createdAt.getTime() + graceMin * 60000);
+        // Calculate grace end time based on booking createdAt
+        const slotStart = new Date(booking.createdAt);
+        const graceEnd = new Date(slotStart.getTime() + graceMin * 60000);
 
+        console.log(`  Booking ${booking._id}: slotStart=${slotStart}, graceEnd=${graceEnd}, now=${now}`);
+        
+        // Only expire if the grace period has passed
         if (now > graceEnd) {
+          console.log(`  Expiring booking ${booking._id}`);
           booking.status = 'expired';
           await booking.save();
 
-          // Add penalty point, fine, and block for 5 hours
+          // Just notify the user
           const user = await User.findById(booking.user);
           if (user) {
-            user.penaltyPoints = (user.penaltyPoints || 0) + 1;
-            user.unpaidFines = (user.unpaidFines || 0) + 10; // Rs 10 fine
-
-            // Determine block duration (3 days if >=3 points, else 5 hours)
-            let blockUntil = new Date();
-            let blockReason = '';
-            
-            if (user.penaltyPoints >= 3) {
-              blockUntil.setDate(blockUntil.getDate() + 3);
-              blockReason = 'repeated no-shows';
-            } else {
-              blockUntil.setHours(blockUntil.getHours() + 5);
-              blockReason = 'missing a check-in';
-            }
-            
-            // Only update block if it extends the current block
-            if (!user.blockedUntil || blockUntil > user.blockedUntil) {
-                user.blockedUntil = blockUntil;
-            }
-
-            await user.save();
-            await notify(user._id, 'Booking Expired & Penalty Applied', `Your booking for seat ${booking.seat.seatCode} expired. A fine of ₹10 was added. You are blocked from booking for ${user.penaltyPoints >= 3 ? '3 days' : '5 hours'} due to ${blockReason}.`, 'system');
+            await notify(user._id, 'Booking Expired', `Your booking for seat ${booking.seat.seatCode} expired as you did not check in on time.`, 'system');
           }
         }
       }
     } catch (err) {
-      console.error('❌ Cron (expire bookings):', err.message);
+      console.error('❌ Cron (expire bookings):', err.message, err.stack);
     }
   });
 
@@ -101,11 +87,7 @@ const initCronJobs = () => {
   // ──────────────────────────────────────────
   cron.schedule('0 0 * * 0', async () => {
     try {
-      const result = await User.updateMany(
-        { penaltyPoints: { $gt: 0 } },
-        { $inc: { penaltyPoints: -1 } }
-      );
-      console.log(`⏰ Penalty decay: ${result.modifiedCount} users updated`);
+      console.log(`⏰ Penalty decay cron finished`);
 
       // Clear blocks for users whose blockedUntil has passed
       await User.updateMany(

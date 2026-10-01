@@ -37,11 +37,7 @@
           <div class="stat-value" id="stat-fines">₹0</div>
           <div class="stat-label">Unpaid Fines</div>
         </div>
-        <div class="stat-card animate-in">
-          <div class="stat-icon" style="background: var(--success-bg); color: var(--success);">⭐</div>
-          <div class="stat-value" id="stat-penalty">0</div>
-          <div class="stat-label">Penalty Points</div>
-        </div>
+
       </div>
 
       <!-- Quick Actions -->
@@ -120,7 +116,6 @@
 
       // Update stats
       document.getElementById('stat-fines').textContent = `₹${user.unpaidFines || 0}`;
-      document.getElementById('stat-penalty').textContent = user.penaltyPoints || 0;
 
       // Fetch bookings count
       try {

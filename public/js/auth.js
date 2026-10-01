@@ -4,9 +4,11 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Redirect if already logged in
   if (api.isLoggedIn()) {
-    window.location.href = '/dashboard';
+    const user = api.getUser();
+    if (user && user.role === 'admin') window.location.href = '/admin';
+    else if (user && user.role === 'staff') window.location.href = '/staff';
+    else window.location.href = '/dashboard';
     return;
   }
 

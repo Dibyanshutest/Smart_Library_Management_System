@@ -39,7 +39,23 @@
       border-radius: 0 0 var(--radius) var(--radius);
       margin: 0 auto var(--space-8);
       max-width: 300px;
-      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.3);
+      box-shadow: 0 8px 30px rgba(99, 102, 241, 0.35);
+      position: relative;
+      overflow: hidden;
+    }
+    .screen-label::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 200%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+      animation: labelShine 4s ease-in-out infinite;
+    }
+    @keyframes labelShine {
+      0%, 100% { transform: translateX(-50%); }
+      50% { transform: translateX(50%); }
     }
 
     .seat-grid-wrapper {
@@ -132,9 +148,12 @@
       justify-content: center;
       margin-top: var(--space-6);
       padding: var(--space-4);
-      background: var(--surface);
-      border: 1px solid var(--border);
+      background: var(--surface-glass);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border-glass);
       border-radius: var(--radius);
+      box-shadow: var(--shadow-glass);
     }
     .legend-item {
       display: flex;
@@ -155,17 +174,19 @@
       bottom: 0;
       left: 0;
       right: 0;
-      background: var(--surface);
-      border-top: 1px solid var(--border);
+      background: var(--surface-glass-strong);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border-top: 1px solid var(--border-glass);
       border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-      box-shadow: var(--shadow-lg);
+      box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.15), 0 0 40px rgba(99, 102, 241, 0.08);
       padding: var(--space-6);
-      transform: translateY(100%);
+      transform: translateY(100%) scale(0.95);
       transition: transform var(--transition-spring);
       z-index: var(--z-overlay);
     }
     .seat-detail.active {
-      transform: translateY(0);
+      transform: translateY(0) scale(1);
     }
     .seat-detail-handle {
       width: 40px;
@@ -242,10 +263,10 @@
       .seat-detail {
         max-width: 480px;
         left: 50%;
-        transform: translateX(-50%) translateY(100%);
+        transform: translateX(-50%) translateY(100%) scale(0.95);
       }
       .seat-detail.active {
-        transform: translateX(-50%) translateY(0);
+        transform: translateX(-50%) translateY(0) scale(1);
       }
     }
   </style>
