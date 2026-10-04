@@ -14,6 +14,11 @@ const router = express.Router();
 // POST /api/borrowings/request — student requests a book
 router.post('/request', auth, async (req, res, next) => {
   try {
+    // Admins cannot borrow books — only students and staff can
+    if (req.user.role === 'admin') {
+      return res.status(403).json({ message: 'Admins cannot borrow books. Use the catalog to add/edit books instead.' });
+    }
+
     const { bookId } = req.body;
     const user = req.user;
     const settings = await Settings.getSettings();

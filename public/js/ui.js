@@ -215,6 +215,7 @@ function renderNavbar(activePage = '') {
       navLinks = `
         <a href="/staff" class="navbar-link ${activePage === 'staff' ? 'active' : ''}">Staff Panel</a>
         <a href="/scanner" class="navbar-link ${activePage === 'scanner' ? 'active' : ''}">Scanner</a>
+        <a href="/seats" class="navbar-link ${activePage === 'seats' ? 'active' : ''}">Seats</a>
         <a href="/catalog" class="navbar-link ${activePage === 'catalog' ? 'active' : ''}">Catalog</a>
       `;
     } else if (user.role === 'admin') {

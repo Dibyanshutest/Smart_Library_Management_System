@@ -357,10 +357,34 @@
     let selectedSeat = null;
     let activeZone = 'all';
     let refreshInterval = null;
+    const currentUser = api.getUser();
+    const userRole = currentUser ? currentUser.role : 'student';
+    const isStudent = userRole === 'student';
 
     document.addEventListener('DOMContentLoaded', async () => {
       if (!requireAuth()) return;
       renderNavbar('seats');
+
+      // Update header based on role
+      if (!isStudent) {
+        const header = document.querySelector('.section-header h1');
+        header.textContent = userRole === 'admin' ? 'Seat Management (View & Edit)' : 'Seat Map (View Only)';
+
+        // Hide the booking bottom sheet, QR modal for non-students
+        document.getElementById('seat-detail').style.display = 'none';
+        document.getElementById('qr-modal').style.display = 'none';
+
+        // Show info banner
+        const banner = document.createElement('div');
+        banner.className = 'card animate-in';
+        banner.style.cssText = 'margin-bottom:var(--space-4); padding:var(--space-3) var(--space-4); background:var(--surface-glass); border:1px solid var(--border-glass);';
+        if (userRole === 'admin') {
+          banner.innerHTML = '<span style="font-size:var(--text-sm); color:var(--muted);">🛡️ <strong>Admin View</strong> — You can view and manage seats from the admin panel. Seat booking is for students only.</span>';
+        } else {
+          banner.innerHTML = '<span style="font-size:var(--text-sm); color:var(--muted);">👁️ <strong>Staff View</strong> — You can view seat availability. Seat booking is for students only.</span>';
+        }
+        document.querySelector('.section-header').after(banner);
+      }
 
       try {
         const res = await api.get('/settings');
@@ -385,18 +409,20 @@
         });
       });
 
-      // Event: close seat detail
-      document.getElementById('detail-close-btn').addEventListener('click', hideSeatDetail);
+      if (isStudent) {
+        // Event: close seat detail
+        document.getElementById('detail-close-btn').addEventListener('click', hideSeatDetail);
 
-      // Event: book seat
-      document.getElementById('detail-book-btn').addEventListener('click', bookSeat);
+        // Event: book seat
+        document.getElementById('detail-book-btn').addEventListener('click', bookSeat);
 
-      // Event: favorite
-      document.getElementById('detail-fav-btn').addEventListener('click', toggleFavorite);
+        // Event: favorite
+        document.getElementById('detail-fav-btn').addEventListener('click', toggleFavorite);
 
-      // Event: close QR modal
-      document.getElementById('qr-modal-close').addEventListener('click', () => Modal.hide('qr-modal'));
-      document.getElementById('qr-close-btn').addEventListener('click', () => Modal.hide('qr-modal'));
+        // Event: close QR modal
+        document.getElementById('qr-modal-close').addEventListener('click', () => Modal.hide('qr-modal'));
+        document.getElementById('qr-close-btn').addEventListener('click', () => Modal.hide('qr-modal'));
+      }
     });
 
     async function loadSeats(silent = false) {
@@ -481,8 +507,10 @@
               seatEl.classList.add('seat-selected');
             }
 
-            if (seat.status === 'available' || seat.status === 'mine') {
+            if (isStudent && (seat.status === 'available' || seat.status === 'mine')) {
               seatEl.addEventListener('click', () => selectSeat(seat));
+            } else if (!isStudent) {
+              seatEl.style.cursor = 'default';
             }
 
             row.appendChild(seatEl);

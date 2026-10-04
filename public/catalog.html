@@ -135,6 +135,10 @@
     let availableOnly = false;
     let currentPage = 1;
     let searchTimeout = null;
+    const currentUser = api.getUser();
+    const userRole = currentUser ? currentUser.role : 'student';
+    const canBorrow = ['student', 'staff'].includes(userRole);
+    const canManage = ['staff', 'admin'].includes(userRole);
 
     document.addEventListener('DOMContentLoaded', async () => {
       if (!requireAuth()) return;
@@ -167,6 +171,16 @@
         currentPage = 1;
         loadBooks();
       });
+
+      // Show 'Add Book' button for staff/admin
+      if (canManage) {
+        const headerEl = document.querySelector('.section-header');
+        const addBtn = document.createElement('button');
+        addBtn.className = 'btn btn-primary btn-sm';
+        addBtn.textContent = '+ Add Book';
+        addBtn.addEventListener('click', showAddBookModal);
+        headerEl.appendChild(addBtn);
+      }
 
       await loadBooks();
     });
@@ -202,6 +216,19 @@
             ? `<div class="book-cover"><img src="${book.coverUrl}" alt="${book.title}" onerror="this.parentElement.innerHTML='📚'"></div>`
             : `<div class="book-cover">📚</div>`;
 
+          // Build action buttons based on role
+          let actionButtons = '';
+          if (canBorrow) {
+            if (available) {
+              actionButtons += `<button class="btn btn-primary btn-sm" onclick="requestBook('${book._id}', '${book.title.replace(/'/g, "\\'")}')">Request</button>`;
+            } else {
+              actionButtons += `<button class="btn btn-secondary btn-sm" onclick="joinWaitlist('${book._id}', '${book.title.replace(/'/g, "\\'")}')">Waitlist</button>`;
+            }
+          }
+          if (canManage) {
+            actionButtons += ` <button class="btn btn-ghost btn-sm" onclick="showEditBookModal('${book._id}')">✏️ Edit</button>`;
+          }
+
           return `
             <div class="book-card animate-in">
               ${coverHtml}
@@ -216,10 +243,9 @@
                   <span class="availability ${available ? 'avail-yes' : 'avail-no'}">
                     ${available ? `${book.availableCopies}/${book.totalCopies} available` : 'Unavailable'}
                   </span>
-                  ${available
-                    ? `<button class="btn btn-primary btn-sm" onclick="requestBook('${book._id}', '${book.title.replace(/'/g, "\\'")}')">Request</button>`
-                    : `<button class="btn btn-secondary btn-sm" onclick="joinWaitlist('${book._id}', '${book.title.replace(/'/g, "\\'")}')">Waitlist</button>`
-                  }
+                  <div style="display:flex; gap:var(--space-1);">
+                    ${actionButtons}
+                  </div>
                 </div>
               </div>
             </div>
@@ -268,6 +294,91 @@
       } catch (err) {
         Toast.error(err.message || 'Failed to join waitlist');
       }
+    }
+
+    // ─── Add / Edit Book Modals (Staff & Admin) ───
+    function showAddBookModal() {
+      Modal.create({
+        title: '📗 Add New Book',
+        id: 'add-book-modal',
+        content: `
+          <form id="add-book-form">
+            <div class="form-group"><label class="form-label">Title</label><input type="text" class="form-input" name="title" required></div>
+            <div class="form-group"><label class="form-label">Author</label><input type="text" class="form-input" name="author" required></div>
+            <div class="form-group"><label class="form-label">Category</label>
+              <select class="form-input" name="category">
+                <option>Programming</option><option>Science</option><option>Fiction</option>
+                <option>History</option><option>Business</option><option>Engineering</option><option>Other</option>
+              </select>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3);">
+              <div class="form-group"><label class="form-label">Total Copies</label><input type="number" class="form-input" name="totalCopies" min="1" value="1" required></div>
+              <div class="form-group"><label class="form-label">Published Year</label><input type="number" class="form-input" name="publishedYear" placeholder="2024"></div>
+            </div>
+            <div class="form-group"><label class="form-label">Cover URL (optional)</label><input type="text" class="form-input" name="coverUrl" placeholder="https://..."></div>
+            <div class="form-group"><label class="form-label">Tags (comma-separated)</label><input type="text" class="form-input" name="tags" placeholder="javascript, web"></div>
+            <button type="submit" class="btn btn-primary w-full" style="margin-top:var(--space-3);">Add Book</button>
+          </form>
+        `
+      });
+      document.getElementById('add-book-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const body = Object.fromEntries(fd.entries());
+        body.totalCopies = parseInt(body.totalCopies) || 1;
+        body.availableCopies = body.totalCopies;
+        body.publishedYear = body.publishedYear ? parseInt(body.publishedYear) : undefined;
+        body.tags = body.tags ? body.tags.split(',').map(t => t.trim()) : [];
+        try {
+          await api.post('/books', body);
+          Toast.success('Book added successfully!', '📗 Added');
+          Modal.hide('add-book-modal');
+          loadBooks();
+        } catch (err) { Toast.error(err.message || 'Failed to add book'); }
+      });
+    }
+
+    async function showEditBookModal(bookId) {
+      try {
+        const res = await api.get(`/books/${bookId}`);
+        const book = res.book;
+        Modal.create({
+          title: '✏️ Edit Book',
+          id: 'edit-book-modal',
+          content: `
+            <form id="edit-book-form">
+              <div class="form-group"><label class="form-label">Title</label><input type="text" class="form-input" name="title" value="${book.title}" required></div>
+              <div class="form-group"><label class="form-label">Author</label><input type="text" class="form-input" name="author" value="${book.author}" required></div>
+              <div class="form-group"><label class="form-label">Category</label>
+                <select class="form-input" name="category">
+                  ${['Programming','Science','Fiction','History','Business','Engineering','Other'].map(c => `<option ${book.category === c ? 'selected' : ''}>${c}</option>`).join('')}
+                </select>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3);">
+                <div class="form-group"><label class="form-label">Total Copies</label><input type="number" class="form-input" name="totalCopies" min="1" value="${book.totalCopies}" required></div>
+                <div class="form-group"><label class="form-label">Available Copies</label><input type="number" class="form-input" name="availableCopies" min="0" value="${book.availableCopies}" required></div>
+              </div>
+              <div class="form-group"><label class="form-label">Cover URL (optional)</label><input type="text" class="form-input" name="coverUrl" value="${book.coverUrl || ''}"></div>
+              <div class="form-group"><label class="form-label">Tags (comma-separated)</label><input type="text" class="form-input" name="tags" value="${(book.tags || []).join(', ')}"></div>
+              <button type="submit" class="btn btn-primary w-full" style="margin-top:var(--space-3);">Save Changes</button>
+            </form>
+          `
+        });
+        document.getElementById('edit-book-form').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const fd = new FormData(e.target);
+          const body = Object.fromEntries(fd.entries());
+          body.totalCopies = parseInt(body.totalCopies) || 1;
+          body.availableCopies = parseInt(body.availableCopies) || 0;
+          body.tags = body.tags ? body.tags.split(',').map(t => t.trim()) : [];
+          try {
+            await api.put(`/books/${bookId}`, body);
+            Toast.success('Book updated!', '✏️ Updated');
+            Modal.hide('edit-book-modal');
+            loadBooks();
+          } catch (err) { Toast.error(err.message || 'Failed to update book'); }
+        });
+      } catch (err) { Toast.error(err.message || 'Failed to load book details'); }
     }
   </script>
 </body>

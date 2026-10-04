@@ -11,6 +11,11 @@ const router = express.Router();
 // POST /api/bookings — create a booking
 router.post('/', auth, async (req, res, next) => {
   try {
+    // Only students can book seats — admin and staff cannot
+    if (['admin', 'staff'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Seat booking is only available for students.' });
+    }
+
     const { seatId } = req.body;
     const user = req.user;
     const settings = await Settings.getSettings();
